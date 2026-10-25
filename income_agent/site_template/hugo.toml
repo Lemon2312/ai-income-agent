@@ -1,0 +1,27 @@
+baseURL = "https://example.github.io/"
+languageCode = "ja"
+title = "{{TITLE}}"
+enableRobotsTXT = true
+hasCJKLanguage = true
+summaryLength = 60
+
+[params]
+description = "{{DESCRIPTION}}"
+author = "{{AUTHOR}}"
+# 記事末尾に表示する案内（デジタル商品やツールへの導線）。空なら非表示。
+ctaTitle = ""
+ctaText = ""
+ctaURL = ""
+
+[taxonomies]
+tag = "tags"
+
+[[menus.main]]
+name = "運営者情報"
+pageRef = "/about"
+weight = 10
+
+[[menus.main]]
+name = "プライバシーポリシー"
+pageRef = "/privacy"
+weight = 20

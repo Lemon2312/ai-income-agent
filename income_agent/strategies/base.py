@@ -18,6 +18,7 @@ class Context:
     data_dir: Path
     fetch: Fetcher
     currency: str
+    timezone: str = "Asia/Tokyo"
 
 
 class Strategy(ABC):

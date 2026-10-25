@@ -27,7 +27,8 @@ class Agent:
         self.store = store or Store(config.agent.data_dir / "agent.db")
         self.llm = BudgetedLLM(llm or build_llm(config.llm), self.store, config.llm, config.agent)
         self.ctx = Context(llm=self.llm, store=self.store, data_dir=config.agent.data_dir,
-                           fetch=fetch, currency=config.agent.currency)
+                           fetch=fetch, currency=config.agent.currency,
+                           timezone=config.agent.timezone)
         self.strategies: dict[str, Strategy] = {}
         for name, cfg in config.strategies.items():
             cls = REGISTRY.get(name)

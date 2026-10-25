@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS seen_items (
@@ -42,6 +43,12 @@ DONE = "done"
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def day_start_iso(tz_name: str) -> str:
+    """Start of the current day in `tz_name`, as a UTC timestamp comparable with now_iso()."""
+    local = datetime.now(ZoneInfo(tz_name)).replace(hour=0, minute=0, second=0, microsecond=0)
+    return local.astimezone(timezone.utc).isoformat(timespec="seconds")
 
 
 @dataclass
@@ -86,13 +93,24 @@ class Store:
     # --- approval queue ---------------------------------------------------
     def add_action(self, strategy: str, kind: str, title: str, payload: dict[str, Any],
                    status: str = PENDING) -> int:
+        ts = now_iso()
         cur = self.conn.execute(
-            "INSERT INTO actions (strategy, kind, title, payload, status, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (strategy, kind, title, json.dumps(payload, ensure_ascii=False), status, now_iso()),
+            "INSERT INTO actions (strategy, kind, title, payload, status, created_at, decided_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (strategy, kind, title, json.dumps(payload, ensure_ascii=False), status, ts,
+             None if status == PENDING else ts),
         )
         self.conn.commit()
         return int(cur.lastrowid)
+
+    def count_actions(self, strategy: str, kind: str, status: str,
+                      since: str | None = None) -> int:
+        sql = "SELECT COUNT(*) AS n FROM actions WHERE strategy = ? AND kind = ? AND status = ?"
+        params: list[Any] = [strategy, kind, status]
+        if since:
+            sql += " AND COALESCE(decided_at, created_at) >= ?"
+            params.append(since)
+        return int(self.conn.execute(sql, params).fetchone()["n"])
 
     def get_action(self, action_id: int) -> Action | None:
         row = self.conn.execute("SELECT * FROM actions WHERE id = ?", (action_id,)).fetchone()
@@ -123,11 +141,13 @@ class Store:
         )
         self.conn.commit()
 
-    def titles(self, strategy: str, kind: str) -> list[str]:
-        rows = self.conn.execute(
-            "SELECT title FROM actions WHERE strategy = ? AND kind = ? AND status != ?",
-            (strategy, kind, REJECTED),
-        ).fetchall()
+    def titles(self, strategy: str, kind: str, include_rejected: bool = False) -> list[str]:
+        sql = "SELECT title FROM actions WHERE strategy = ? AND kind = ?"
+        params: list[Any] = [strategy, kind]
+        if not include_rejected:
+            sql += " AND status != ?"
+            params.append(REJECTED)
+        rows = self.conn.execute(sql, params).fetchall()
         return [r["title"] for r in rows]
 
     @staticmethod
