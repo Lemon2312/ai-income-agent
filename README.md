@@ -20,7 +20,26 @@
 - **重複排除**: 一度評価した案件や書いた記事タイトルは再処理しません。
 - **依存ゼロ**: Python 3.11以上の標準ライブラリだけで動きます。LLMはOpenAI互換APIなら何でも使えます（OpenAI / OpenRouter / Groq / Ollama / LM Studio など）。
 
-## セットアップ
+## GitHub だけで始める（PC・サーバー不要）
+
+このリポジトリには、ブログ本体（`site/`）と、GitHub Actions で毎日9時・18時（日本時間）に記事を書く仕組みが入っています。設定はブラウザだけで完了します。
+
+1. **APIキーを登録**: リポジトリの Settings → Secrets and variables → Actions → New repository secret で、名前 `OPENAI_API_KEY`、値に OpenAI のAPIキーを登録
+2. **Pages を有効化**: Settings → Pages → Build and deployment の Source を「GitHub Actions」に変更
+3. **プルリクエスト作成を許可**: Settings → Actions → General → Workflow permissions で「Allow GitHub Actions to create and approve pull requests」にチェックして Save
+4. **試しに1回動かす**: Actions タブ → 「Blog agent」→「Run workflow」
+
+数分後、記事がプルリクエストとして届きます（GitHub アプリならスマホに通知が来ます）。
+
+- **公開する**: プルリクエストを「Merge」すると、数分でブログ（`https://<ユーザー名>.github.io/<リポジトリ名>/`）に公開されます
+- **公開しない**: 「Close」するだけ。同じテーマは二度と書きません
+- **直してから公開する**: 「Files changed」タブで記事を編集してからマージ
+
+品質に納得したら、`agent.toml` の `deploy = "github-pr"` を `deploy = "git"` に変えると、確認なしの完全自動公開になります。ジャンル、1日の本数、品質基準、アフィリエイトリンクなども `agent.toml` で変更できます（GitHub 上で直接編集できます）。
+
+実行に失敗したとき（APIキー未設定、予算超過以外のエラーなど）は GitHub からメールが届きます。実行履歴と収支のデータは `.agent/` に自動で保存されます。
+
+## 手元で使う場合のセットアップ
 
 ```bash
 pip install -e .            # income-agent コマンドが使えるようになります

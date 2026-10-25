@@ -1,0 +1,54 @@
+# GitHub Actions 上でブログを自動運用するための設定（.github/workflows/blog-agent.yml が使用）
+# このファイルを編集して main に push すると、次回の実行から反映されます。
+
+[agent]
+data_dir = ".agent"            # 実行履歴・収支のDB（毎回コミットして次回に引き継ぐ）
+timezone = "Asia/Tokyo"
+currency = "JPY"
+usd_to_currency = 150.0
+daily_llm_budget_usd = 1.0     # 1日あたりのAI利用料の上限
+
+[llm]
+provider = "openai"            # APIキー（リポジトリの Secrets: OPENAI_API_KEY）が必須。未設定なら失敗して通知されます
+base_url = "https://api.openai.com/v1"
+model = "gpt-4o-mini"          # 使えるモデル名は OpenAI のダッシュボードで確認できます
+api_key_env = "OPENAI_API_KEY"
+input_price_per_1m = 0.15      # 予算計算用の料金（USD / 100万トークン）。モデルを変えたら合わせて変更
+output_price_per_1m = 0.60
+
+[strategies.freelance_scout]
+enabled = false                # 案件スカウトは手元で使う機能のため、ここでは無効
+
+[strategies.content_publisher]
+enabled = true
+niche = "一人で仕事をしているフリーランスのためのAI時短術（ChatGPT等の生成AI、Notion、自動化ツール、請求・事務作業の効率化）"
+audience = "デザイナー・ライター・エンジニアなど一人で働くフリーランス。作業や事務に追われて時間がなく、AIを仕事に活かしたいがまだ使いこなせていない人"
+language = "ja"
+tags = ["フリーランス", "AI活用", "時短"]
+site_dir = "site"
+
+# 公開方法
+#   "github-pr": 1記事ずつプルリクエストで届く。マージで公開、閉じれば非公開（試し書き期間におすすめ）
+#   "git":       確認なしで直接公開（完全自動）
+deploy = "github-pr"
+fail_on_deploy_error = true    # 公開に失敗したら実行を失敗扱いにしてメールで通知
+require_approval = false       # 承認は上の deploy で行うため false のまま
+
+articles_per_run = 1
+max_articles_per_day = 2       # 1日の上限（プルリクエストで届いた記事も数える）
+
+min_chars = 3000
+min_quality = 0.8
+max_revisions = 2
+
+topics = [
+  "フリーランスの請求書作成をAIで5分に短縮する方法",
+  "ChatGPTでクライアントへの提案文・見積もりメールを作るプロンプト集",
+  "Notionでフリーランスの案件・タスク管理を一元化するテンプレートの作り方",
+]
+
+affiliate_disclosure = "※本記事はアフィリエイト広告（PR）を含みます。"
+# アフィリエイトに登録したら、コメントを外してリンクを設定してください。
+# [[strategies.content_publisher.affiliate_links]]
+# keyword = "Notion"
+# url = "https://（ASPで発行したリンク）"
