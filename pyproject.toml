@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ai-income-agent"
+version = "0.1.0"
+description = "Semi-autonomous AI agent that finds and prepares income opportunities, with human approval for anything that touches money or accounts."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+income-agent = "income_agent.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["income_agent*"]
+
+[tool.setuptools.package-data]
+income_agent = ["config.example.toml", "site_template/**/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

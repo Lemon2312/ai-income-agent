@@ -1,0 +1,86 @@
+# ai-income-agent 設定ファイル
+# パスはこのファイルからの相対パスで解決されます。
+
+[agent]
+data_dir = "data"              # DB・下書きの保存先
+interval_minutes = 60          # 常駐モードの実行間隔
+currency = "JPY"               # 収支レポートの通貨
+usd_to_currency = 150.0        # LLM料金(USD)の換算レート
+daily_llm_budget_usd = 1.0     # 1日あたりのLLM利用上限。超えるとその日は停止
+
+[llm]
+# "auto": APIキーがあればOpenAI互換API、なければオフラインのモック
+# "openai": OpenAI互換API（OpenAI / OpenRouter / Groq / Ollama / LM Studio など）
+# "mock": 常にモック（動作確認用）
+provider = "auto"
+base_url = "https://api.openai.com/v1"
+model = "gpt-4o-mini"
+api_key_env = "OPENAI_API_KEY"
+input_price_per_1m = 0.15      # USD / 100万入力トークン
+output_price_per_1m = 0.60     # USD / 100万出力トークン
+
+# ---------------------------------------------------------------------------
+# 戦略1: 案件スカウト
+# RSS/Atomフィードを巡回 → キーワードで絞り込み → LLMで採点 → 提案文を下書き
+# 応募はプラットフォーム規約上、人間が自分のアカウントで行います。
+# ---------------------------------------------------------------------------
+[strategies.freelance_scout]
+enabled = true
+feeds = [
+  "https://weworkremotely.com/categories/remote-programming-jobs.rss",
+  "https://remoteok.com/remote-jobs.rss",
+]
+keywords = ["python", "automation", "scraping", "data", "ai", "自動化"]
+exclude_keywords = ["senior staff", "unpaid"]
+min_score = 0.7                # これ以上のスコアの案件だけ提案文を作成
+max_items_per_run = 15         # 1サイクルでLLM評価する最大件数（コスト制御）
+profile = """
+名前: 山田太郎（例）
+スキル: Python, Webスクレイピング, データ分析, 業務自動化, OpenAI API
+実績: ECサイトの在庫自動取得ツール開発、Excel業務のPython化で作業時間80%削減
+希望: リモート、時給3,000円以上 / 固定報酬なら5万円以上
+"""
+
+# ---------------------------------------------------------------------------
+# 戦略2: ブログ×アフィリエイト（完全自動運用）
+# 企画 → 執筆 → AI編集長が採点（基準未満は書き直し、それでもダメなら破棄）
+# → アフィリエイトリンク挿入・PR表記 → ブログに追加 → git push で自動公開
+# 事前に `income-agent init-site` でブログを作成し、GitHub に push しておきます。
+# ---------------------------------------------------------------------------
+[strategies.content_publisher]
+enabled = true
+niche = "一人で仕事をしているフリーランスのためのAI時短術（ChatGPT等の生成AI、Notion、自動化ツール、請求・事務作業の効率化）"
+audience = "デザイナー・ライター・エンジニアなど一人で働くフリーランス。作業や事務に追われて時間がなく、AIを仕事に活かしたいがまだ使いこなせていない人"
+language = "ja"
+tags = ["フリーランス", "AI活用", "時短"]
+
+# ブログ（init-site の初期値にも使われます）
+site_dir = "site"
+site_title = "フリーランスのAI時短ラボ"
+site_description = "一人で働くフリーランスが、AIとツールで作業時間を減らすための実践ガイド。すぐ使えるプロンプトやテンプレートを紹介します。"
+author = "運営者"
+
+# 自動運用
+require_approval = false       # true にすると公開前に `income-agent approve` が必要
+deploy = "git"                 # "git": site_dir に commit & push して自動公開 / "none": コピーのみ
+articles_per_run = 1
+max_articles_per_day = 2       # 量産スパム扱いを避けるための1日の上限（公開済み＋承認待ち）
+
+# 品質チェック
+min_chars = 3000
+min_quality = 0.8              # AI編集長のスコアがこれ未満なら書き直し
+max_revisions = 2              # 書き直しの最大回数。それでも基準未満なら公開しない
+
+# 書きたいタイトルがあれば指定（なければLLMが企画）
+topics = [
+  "フリーランスの請求書作成をAIで5分に短縮する方法",
+  "ChatGPTでクライアントへの提案文・見積もりメールを作るプロンプト集",
+  "Notionでフリーランスの案件・タスク管理を一元化するテンプレートの作り方",
+]
+
+affiliate_disclosure = "※本記事はアフィリエイト広告（PR）を含みます。"
+# 自分のアフィリエイトリンクを登録すると、記事中で最初に出たキーワードがリンクになります。
+# 例（コメントを外して URL を差し替えてください。仮のURLのまま公開しないこと）:
+# [[strategies.content_publisher.affiliate_links]]
+# keyword = "Notion"
+# url = "https://（ASPで発行したリンク）"
