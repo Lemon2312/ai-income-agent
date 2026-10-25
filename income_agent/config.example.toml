@@ -1,0 +1,69 @@
+# ai-income-agent 設定ファイル
+# パスはこのファイルからの相対パスで解決されます。
+
+[agent]
+data_dir = "data"              # DB・下書きの保存先
+interval_minutes = 60          # 常駐モードの実行間隔
+currency = "JPY"               # 収支レポートの通貨
+usd_to_currency = 150.0        # LLM料金(USD)の換算レート
+daily_llm_budget_usd = 1.0     # 1日あたりのLLM利用上限。超えるとその日は停止
+
+[llm]
+# "auto": APIキーがあればOpenAI互換API、なければオフラインのモック
+# "openai": OpenAI互換API（OpenAI / OpenRouter / Groq / Ollama / LM Studio など）
+# "mock": 常にモック（動作確認用）
+provider = "auto"
+base_url = "https://api.openai.com/v1"
+model = "gpt-4o-mini"
+api_key_env = "OPENAI_API_KEY"
+input_price_per_1m = 0.15      # USD / 100万入力トークン
+output_price_per_1m = 0.60     # USD / 100万出力トークン
+
+# ---------------------------------------------------------------------------
+# 戦略1: 案件スカウト
+# RSS/Atomフィードを巡回 → キーワードで絞り込み → LLMで採点 → 提案文を下書き
+# 応募はプラットフォーム規約上、人間が自分のアカウントで行います。
+# ---------------------------------------------------------------------------
+[strategies.freelance_scout]
+enabled = true
+feeds = [
+  "https://weworkremotely.com/categories/remote-programming-jobs.rss",
+  "https://remoteok.com/remote-jobs.rss",
+]
+keywords = ["python", "automation", "scraping", "data", "ai", "自動化"]
+exclude_keywords = ["senior staff", "unpaid"]
+min_score = 0.7                # これ以上のスコアの案件だけ提案文を作成
+max_items_per_run = 15         # 1サイクルでLLM評価する最大件数（コスト制御）
+profile = """
+名前: 山田太郎（例）
+スキル: Python, Webスクレイピング, データ分析, 業務自動化, OpenAI API
+実績: ECサイトの在庫自動取得ツール開発、Excel業務のPython化で作業時間80%削減
+希望: リモート、時給3,000円以上 / 固定報酬なら5万円以上
+"""
+
+# ---------------------------------------------------------------------------
+# 戦略2: コンテンツ（ブログ×アフィリエイト）
+# 記事を企画・執筆 → アフィリエイトリンクを挿入 → PR表記を付与 → 下書き保存
+# 承認すると publish_dir にコピー（Hugo/Jekyll/Astro等でビルドして公開）
+# ---------------------------------------------------------------------------
+[strategies.content_publisher]
+enabled = true
+niche = "在宅ワーク向けの業務効率化ツール"
+audience = "ITに詳しくない個人事業主・副業初心者"
+language = "ja"
+articles_per_run = 1
+min_chars = 2500
+require_approval = true        # false にすると承認なしで publish_dir へ自動公開
+publish_dir = "site/content/posts"
+tags = ["効率化", "ツール"]
+affiliate_disclosure = "※本記事はアフィリエイト広告（PR）を含みます。"
+# 書きたいタイトルがあれば指定（なければLLMが企画）
+topics = []
+
+[[strategies.content_publisher.affiliate_links]]
+keyword = "Notion"
+url = "https://example.com/your-affiliate-link/notion"
+
+[[strategies.content_publisher.affiliate_links]]
+keyword = "Zapier"
+url = "https://example.com/your-affiliate-link/zapier"
