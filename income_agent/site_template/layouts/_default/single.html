@@ -1,0 +1,29 @@
+{{ define "main" }}
+<article class="post">
+  <h1>{{ .Title }}</h1>
+  {{ if eq .Section "posts" }}
+  <p class="meta">
+    <time datetime="{{ .Date.Format "2006-01-02" }}">{{ .Date.Format "2006年1月2日" }}</time>
+    {{ range .GetTerms "tags" }}<a class="tag" href="{{ .RelPermalink }}">#{{ .LinkTitle }}</a>{{ end }}
+  </p>
+  {{ end }}
+  <div class="content">{{ .Content }}</div>
+
+  {{ if and (eq .Section "posts") site.Params.ctaURL }}
+  <aside class="cta">
+    <h2>{{ site.Params.ctaTitle }}</h2>
+    <p>{{ site.Params.ctaText }}</p>
+    <a class="button" href="{{ site.Params.ctaURL }}">詳しく見る</a>
+  </aside>
+  {{ end }}
+
+  {{ if eq .Section "posts" }}
+  {{ with site.RegularPages.Related . | first 3 }}
+  <aside class="related">
+    <h2>関連記事</h2>
+    {{ partial "post-list.html" . }}
+  </aside>
+  {{ end }}
+  {{ end }}
+</article>
+{{ end }}
