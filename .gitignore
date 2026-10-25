@@ -4,4 +4,4 @@ __pycache__/
 .venv/
 /config.toml
 /data/
-/site/
+/.agent/drafts/

@@ -1,0 +1,6 @@
+{{- $external := strings.HasPrefix .Destination "http" -}}
+<a href="{{ .Destination | safeURL }}"
+  {{- if eq .Title "sponsored" }} rel="sponsored nofollow noopener" target="_blank"
+  {{- else }}{{ with .Title }} title="{{ . }}"{{ end }}{{ if $external }} rel="noopener" target="_blank"{{ end }}
+  {{- end }}>{{ .Text | safeHTML }}</a>
+{{- /* keep on one line so no stray whitespace is rendered */ -}}
