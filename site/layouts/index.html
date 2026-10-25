@@ -1,0 +1,9 @@
+{{ define "main" }}
+<section class="hero">
+  <h1>{{ site.Title }}</h1>
+  <p>{{ site.Params.description }}</p>
+</section>
+{{ $paginator := .Paginate (where site.RegularPages "Section" "posts") }}
+{{ with $paginator.Pages }}{{ partial "post-list.html" . }}{{ else }}<p>最初の記事を準備中です。</p>{{ end }}
+{{ partial "pager.html" $paginator }}
+{{ end }}

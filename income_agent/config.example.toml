@@ -62,7 +62,8 @@ author = "運営者"
 
 # 自動運用
 require_approval = false       # true にすると公開前に `income-agent approve` が必要
-deploy = "git"                 # "git": site_dir に commit & push して自動公開 / "none": コピーのみ
+deploy = "git"                 # "git": commit & push して自動公開 / "github-pr": 記事ごとにプルリクエスト / "none": コピーのみ
+fail_on_deploy_error = false   # true なら公開失敗時に実行をエラー終了
 articles_per_run = 1
 max_articles_per_day = 2       # 量産スパム扱いを避けるための1日の上限（公開済み＋承認待ち）
 

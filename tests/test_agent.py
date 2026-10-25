@@ -260,6 +260,74 @@ def test_deploy_failure_does_not_crash_cycle(tmp_path):
     assert len(articles(agent, DONE)) == 1
 
 
+def _repo_with_remote(tmp_path: Path) -> tuple[Path, Path]:
+    """A repository (like this one) whose blog lives in a site/ subdirectory."""
+    remote = tmp_path / "remote.git"
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(remote)], check=True)
+    init_site(tmp_path / "site", "t", "d", "a", git=False, workflow=False)
+    for cmd in (["init", "-q", "-b", "main"], ["add", "-A"], ["commit", "-q", "-m", "init"],
+                ["remote", "add", "origin", str(remote)], ["push", "-q", "-u", "origin", "main"]):
+        subprocess.run(["git", "-C", str(tmp_path), *cmd], check=True)
+    return tmp_path, remote
+
+
+def test_git_deploy_works_when_site_is_a_subdirectory(tmp_path):
+    _, remote = _repo_with_remote(tmp_path)
+    agent = make_agent(tmp_path, scout=False, require_approval="false", deploy='"git"')
+    assert not agent.run_once().errors
+    files = subprocess.run(["git", "-C", str(remote), "show", "--name-only", "--format=", "main"],
+                           capture_output=True, text=True, check=True).stdout.split()
+    assert len(files) == 1 and files[0].startswith("site/content/posts/")
+
+
+def test_github_pr_deploy_opens_pull_request(tmp_path, monkeypatch):
+    repo, remote = _repo_with_remote(tmp_path)
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    gh_log = tmp_path / "gh.log"
+    (bin_dir / "gh").write_text(
+        f'#!/bin/sh\nprintf "%s\\n" "$@" > {gh_log}\necho https://github.com/o/r/pull/7\n')
+    (bin_dir / "gh").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}:{__import__('os').environ['PATH']}")
+
+    agent = make_agent(tmp_path, scout=False, require_approval="false", deploy='"github-pr"',
+                       fail_on_deploy_error="true")
+    assert not agent.run_once().errors
+
+    args = gh_log.read_text(encoding="utf-8").splitlines()
+    assert args[:3] == ["pr", "create", "--base"] and args[3] == "main"
+    branch = args[args.index("--head") + 1]
+    assert branch.startswith("post/")
+    assert "マージすると公開されます" in "\n".join(args[args.index("--body") + 1:])
+
+    # The post lives only on the PR branch; main and the working tree stay untouched.
+    current = subprocess.run(["git", "-C", str(repo), "branch", "--show-current"],
+                             capture_output=True, text=True).stdout.strip()
+    assert current == "main"
+    assert not list(posts_dir(tmp_path).glob("2*.md"))
+    branches = subprocess.run(["git", "-C", str(remote), "branch", "--list"],
+                              capture_output=True, text=True).stdout
+    assert branch in branches
+
+
+def test_deploy_errors_fail_the_run_when_requested(tmp_path):
+    agent = make_agent(tmp_path, scout=False, require_approval="false", deploy='"github-pr"',
+                       fail_on_deploy_error="true")
+    assert "content_publisher" in agent.run_once().errors
+
+
+def test_repo_agent_config_requires_api_key(monkeypatch, capsys):
+    repo_config = Path(__file__).resolve().parent.parent / "agent.toml"
+    cfg = load_config(repo_config)
+    assert cfg.llm.provider == "openai"
+    assert cfg.strategies["content_publisher"]["deploy"] == "github-pr"
+    assert Path(cfg.strategies["content_publisher"]["site_dir"]).joinpath("hugo.toml").exists()
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    with pytest.raises(SystemExit) as exc:
+        main(["-c", str(repo_config), "report"])
+    assert "OPENAI_API_KEY" in str(exc.value)
+
+
 # --- CLI ---------------------------------------------------------------------
 
 def test_cli_end_to_end(tmp_path, capsys):

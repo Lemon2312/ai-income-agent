@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from income_agent.deploy import DeployError, git_publish
+from income_agent.deploy import DeployError, git_publish, github_pull_request
 from income_agent.llm import BudgetExceeded, LLMError
 from income_agent.storage import DONE, PENDING, REJECTED, Action, day_start_iso
 from income_agent.strategies.base import Strategy
@@ -77,6 +77,18 @@ def insert_affiliate_links(markdown: str, links: list[dict[str, str]]) -> tuple[
 
 def _body_chars(markdown: str) -> int:
     return len(re.sub(r"\s", "", markdown))
+
+
+def _pr_body(title: str, payload: dict[str, Any]) -> str:
+    history = " → ".join(f"{s:.2f}" for s in payload.get("quality_history", []))
+    issues = "\n".join(f"- {i}" for i in payload.get("issues", [])) or "- なし"
+    return (
+        f"AIエージェントが書いた記事「{title}」です。\n\n"
+        "**マージすると公開されます。** 公開したくない場合はこのプルリクエストを閉じてください。\n"
+        "内容を直したい場合は、「Files changed」タブから記事ファイルを編集してからマージできます。\n\n"
+        f"- 品質スコア（AI編集長）: {history}\n\n"
+        f"編集長の最後の指摘:\n{issues}\n"
+    )
 
 
 class ContentPublisher(Strategy):
@@ -197,7 +209,7 @@ class ContentPublisher(Strategy):
             return self.ctx.store.add_action(self.name, "article", title, payload)
 
         action_id = self.ctx.store.add_action(self.name, "article", title, payload, status=DONE)
-        self.log.info(self._publish(path, title))
+        self.log.info(self._publish(path, title, payload))
         return action_id
 
     def _save_draft(self, title: str, body: str, description: str) -> Path:
@@ -222,24 +234,35 @@ class ContentPublisher(Strategy):
         path.write_text(front_matter + body + "\n", encoding="utf-8")
         return path
 
-    def _publish(self, draft: Path, title: str) -> str:
+    def _publish(self, draft: Path, title: str, payload: dict[str, Any] | None = None) -> str:
         self.publish_dir.mkdir(parents=True, exist_ok=True)
         dest = self.publish_dir / draft.name
         shutil.copy2(draft, dest)
         message = f"公開ディレクトリにコピーしました: {dest}"
-        if self.cfg.get("deploy", "none") != "git":
-            return message
+        mode = self.cfg.get("deploy", "none")
         repo = self.site_dir or self.publish_dir
         try:
-            return message + "\n" + git_publish(repo, [dest], f"Add post: {title}",
-                                                push=self.cfg.get("git_push", True))
+            if mode == "git":
+                result = git_publish(repo, [dest], f"Add post: {title}",
+                                     push=self.cfg.get("git_push", True))
+            elif mode == "github-pr":
+                branch = f"post/{draft.stem}-{datetime.now(timezone.utc):%H%M%S}"
+                result = github_pull_request(repo, [dest], branch,
+                                             f"記事: {title}", _pr_body(title, payload or {}))
+            elif mode == "none":
+                return message
+            else:
+                raise DeployError(f"unknown deploy mode: {mode!r}")
         except DeployError as e:
-            # The post stays committed locally and goes out with the next successful push.
+            if self.cfg.get("fail_on_deploy_error", False):
+                raise
+            # With "git" the post stays committed locally and goes out with the next push.
             self.log.error("deploy failed: %s", e)
             return message + f"\nデプロイに失敗しました: {e}"
+        return message + "\n" + result
 
     def on_approve(self, action: Action) -> str:
         draft = Path(action.payload["draft_path"])
         if not draft.exists():
             raise FileNotFoundError(f"draft not found: {draft}")
-        return self._publish(draft, action.title)
+        return self._publish(draft, action.title, action.payload)

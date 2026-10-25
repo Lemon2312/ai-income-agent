@@ -19,7 +19,10 @@ def _agent(args: argparse.Namespace) -> Agent:
     path = Path(args.config)
     if not path.exists():
         sys.exit(f"{path} が見つかりません。先に `income-agent init` を実行してください。")
-    return Agent(load_config(path))
+    try:
+        return Agent(load_config(path))
+    except ValueError as e:
+        sys.exit(f"設定エラー: {e}")
 
 
 def cmd_init(args: argparse.Namespace) -> int:
@@ -60,7 +63,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         result = agent.run_once()
         for name, ids in result.created.items():
             pending = sum(1 for i in ids if agent.store.get_action(i).status == PENDING)
-            print(f"  {name}: {len(ids)} 件を作成（自動公開 {len(ids) - pending} 件 / 承認待ち {pending} 件）")
+            print(f"  {name}: {len(ids)} 件を作成（公開・PR作成 {len(ids) - pending} 件 / 承認キュー {pending} 件）")
         for name, err in result.errors.items():
             print(f"  {name}: エラー {err}")
         if result.budget_exhausted:

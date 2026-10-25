@@ -10,12 +10,14 @@ RENAMES = {"github": ".github", "gitignore": ".gitignore"}
 TEXT_SUFFIXES = {".toml", ".md", ".html", ".yml", ".css", ""}
 
 
-def _copy(src: Traversable, dest: Path, values: dict[str, str]) -> None:
+def _copy(src: Traversable, dest: Path, values: dict[str, str], skip: set[str]) -> None:
     for entry in src.iterdir():
+        if entry.name in skip:
+            continue
         target = dest / RENAMES.get(entry.name, entry.name)
         if entry.is_dir():
             target.mkdir(parents=True, exist_ok=True)
-            _copy(entry, target, values)
+            _copy(entry, target, values, skip)
             continue
         if Path(entry.name).suffix in TEXT_SUFFIXES:
             text = entry.read_text(encoding="utf-8")
@@ -26,13 +28,17 @@ def _copy(src: Traversable, dest: Path, values: dict[str, str]) -> None:
             target.write_bytes(entry.read_bytes())
 
 
-def init_site(dest: Path, title: str, description: str, author: str, git: bool = True) -> list[str]:
-    """Creates a Hugo blog wired for GitHub Pages and returns follow-up instructions."""
+def init_site(dest: Path, title: str, description: str, author: str, git: bool = True,
+              workflow: bool = True) -> list[str]:
+    """Creates a Hugo blog wired for GitHub Pages and returns follow-up instructions.
+    `workflow=False` omits the Pages workflow, for sites living inside a repository
+    that deploys them from its own root-level workflow."""
     if dest.exists() and any(dest.iterdir()):
         raise FileExistsError(f"{dest} already exists and is not empty")
     dest.mkdir(parents=True, exist_ok=True)
     template = resources.files("income_agent").joinpath("site_template")
-    _copy(template, dest, {"TITLE": title, "DESCRIPTION": description, "AUTHOR": author})
+    _copy(template, dest, {"TITLE": title, "DESCRIPTION": description, "AUTHOR": author},
+          skip=set() if workflow else {"github"})
 
     if git:
         subprocess.run(["git", "init", "-q", "-b", "main", str(dest)], check=True)
