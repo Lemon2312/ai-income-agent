@@ -112,17 +112,19 @@ class MockLLM:
                 "[mock] よくある失敗とその対策まとめ",
             ]}, ensure_ascii=False)
         elif name == "review_article":
-            text = json.dumps({"score": 0.85, "issues": [],
+            text = json.dumps({"scores": {"usefulness": 4, "accuracy": 5, "depth": 4,
+                                          "readability": 4, "compliance": 4}, "issues": [],
                                "description": "[mock] フリーランスがAIで作業時間を減らす方法を解説します。"},
                               ensure_ascii=False)
-        elif name == "revise_article":
-            text = user.split("# 記事", 1)[-1].strip() or "[mock] 修正版"
-        elif name == "write_article":
-            title = re.search(r"タイトル:\s*(.+)", user)
-            heading = title.group(1).strip() if title else "記事"
-            filler = "これはオフライン動作確認用のモック本文です。実際のLLMに接続すると具体的な内容に置き換わります。" * 8
-            sections = "".join(f"## ポイント{i}\n\n{filler}\n\n" for i in range(1, 6))
-            text = f"# {heading}\n\n[mock] この記事では要点をわかりやすく解説します。\n\n{sections}## まとめ\n\n{filler}\n"
+        elif name == "outline_article":
+            text = json.dumps({"intro": "[mock] 導入", "sections": [
+                {"heading": f"[mock] 見出し{i}", "points": ["手順", "例"]} for i in range(1, 5)
+            ]}, ensure_ascii=False)
+        elif name in ("write_section", "revise_section"):
+            target = re.search(r"# 文字数\n(\d+)", user)
+            sentence = "これはオフライン動作確認用のモック本文です。実際のLLMに接続すると具体的な内容に置き換わります。"
+            repeat = int(target.group(1)) // len(sentence) + 1 if target else 3
+            text = "[mock] " + sentence * repeat
         else:
             text = "[mock] OK"
         return LLMResponse(text=text)

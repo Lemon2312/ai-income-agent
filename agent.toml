@@ -37,9 +37,12 @@ require_approval = false       # 承認は上の deploy で行うため false �
 articles_per_run = 1
 max_articles_per_day = 2       # 1日の上限（プルリクエストで届いた記事も数える）
 
+# 品質チェック: AI編集長が5項目（実用性・正確性・深さ・読みやすさ・表現の適切さ）を5点満点で採点。
+# 平均4点（= 0.8）以上で合格。未満なら見出しごとに書き直し、それでもダメなら公開しない
 min_chars = 3000
 min_quality = 0.8
 max_revisions = 2
+max_attempts_per_topic = 2     # 不合格になったテーマを書き直す回数の上限（それを超えたら諦めて次へ）
 
 topics = [
   "フリーランスの請求書作成をAIで5分に短縮する方法",
