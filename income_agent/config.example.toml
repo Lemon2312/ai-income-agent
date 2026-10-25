@@ -71,6 +71,7 @@ max_articles_per_day = 2       # 量産スパム扱いを避けるための1日�
 min_chars = 3000
 min_quality = 0.8              # AI編集長のスコアがこれ未満なら書き直し
 max_revisions = 2              # 書き直しの最大回数。それでも基準未満なら公開しない
+max_attempts_per_topic = 2     # 不合格になったテーマに再挑戦する回数の上限
 
 # 書きたいタイトルがあれば指定（なければLLMが企画）
 topics = [
