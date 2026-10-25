@@ -9,6 +9,7 @@ from pathlib import Path
 
 from income_agent.agent import Agent
 from income_agent.config import load_config
+from income_agent.site import init_site
 from income_agent.storage import PENDING
 
 DEFAULT_CONFIG = "config.toml"
@@ -33,13 +34,33 @@ def cmd_init(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_init_site(args: argparse.Namespace) -> int:
+    content_cfg: dict = {}
+    if Path(args.config).exists():
+        content_cfg = load_config(args.config).strategies.get("content_publisher", {})
+    dest = Path(args.dir or content_cfg.get("site_dir", "site"))
+    title = args.title or content_cfg.get("site_title", "AIブログ")
+    description = args.description or content_cfg.get("site_description", content_cfg.get("niche", ""))
+    author = args.author or content_cfg.get("author", "運営者")
+    try:
+        steps = init_site(dest, title, description, author, git=not args.no_git)
+    except FileExistsError as e:
+        print(e)
+        return 1
+    print(f"ブログを作成しました: {dest}\n\n次の手順で GitHub Pages に公開できます:")
+    for i, step in enumerate(steps, 1):
+        print(f"  {i}. {step}")
+    return 0
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     agent = _agent(args)
     print(f"LLM: {agent.llm.model} / 本日の残り予算: ${agent.llm.remaining_usd():.3f}")
     if args.once:
         result = agent.run_once()
         for name, ids in result.created.items():
-            print(f"  {name}: {len(ids)} 件を承認キューに追加")
+            pending = sum(1 for i in ids if agent.store.get_action(i).status == PENDING)
+            print(f"  {name}: {len(ids)} 件を作成（自動公開 {len(ids) - pending} 件 / 承認待ち {pending} 件）")
         for name, err in result.errors.items():
             print(f"  {name}: エラー {err}")
         if result.budget_exhausted:
@@ -57,7 +78,11 @@ def cmd_queue(args: argparse.Namespace) -> int:
         print("承認待ちはありません。")
         return 0
     for a in actions:
-        extra = f" score={a.payload['score']:.2f}" if "score" in a.payload else ""
+        extra = ""
+        if "score" in a.payload:
+            extra = f" score={a.payload['score']:.2f}"
+        elif "quality" in a.payload:
+            extra = f" quality={a.payload['quality']:.2f}"
         print(f"#{a.id:<4} [{a.status:<8}] {a.strategy:<18} {a.kind:<9}{extra}  {a.title}")
     return 0
 
@@ -73,9 +98,13 @@ def cmd_show(args: argparse.Namespace) -> int:
         print(f"URL: {a.payload.get('url')}\nスコア: {a.payload.get('score')}  理由: {a.payload.get('reason')}\n")
         print("----- 案件概要 -----\n" + a.payload.get("summary", ""))
         print("\n----- 提案文（下書き） -----\n" + a.payload.get("proposal", ""))
-    elif a.kind == "article":
+    elif a.kind in ("article", "article_rejected"):
         path = Path(a.payload["draft_path"])
-        print(f"下書き: {path}  アフィリエイトリンク: {a.payload.get('affiliate_links', 0)} 件\n")
+        history = " → ".join(f"{s:.2f}" for s in a.payload.get("quality_history", []))
+        print(f"下書き: {path}\n品質スコア: {history}")
+        for issue in a.payload.get("issues", []):
+            print(f"  - {issue}")
+        print()
         if path.exists():
             print(path.read_text(encoding="utf-8"))
     else:
@@ -145,6 +174,14 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("init", help="設定ファイルのひな形を作成")
     s.add_argument("--force", action="store_true")
     s.set_defaults(func=cmd_init)
+
+    s = sub.add_parser("init-site", help="GitHub Pages 用のブログ（Hugo）を作成")
+    s.add_argument("--dir", help="作成先（default: 設定の site_dir）")
+    s.add_argument("--title")
+    s.add_argument("--description")
+    s.add_argument("--author")
+    s.add_argument("--no-git", action="store_true", help="git init しない")
+    s.set_defaults(func=cmd_init_site)
 
     s = sub.add_parser("run", help="エージェントを実行（デフォルトは常駐ループ）")
     s.add_argument("--once", action="store_true", help="1サイクルだけ実行して終了")

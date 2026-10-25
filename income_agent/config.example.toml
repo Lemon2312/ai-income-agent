@@ -42,28 +42,45 @@ profile = """
 """
 
 # ---------------------------------------------------------------------------
-# 戦略2: コンテンツ（ブログ×アフィリエイト）
-# 記事を企画・執筆 → アフィリエイトリンクを挿入 → PR表記を付与 → 下書き保存
-# 承認すると publish_dir にコピー（Hugo/Jekyll/Astro等でビルドして公開）
+# 戦略2: ブログ×アフィリエイト（完全自動運用）
+# 企画 → 執筆 → AI編集長が採点（基準未満は書き直し、それでもダメなら破棄）
+# → アフィリエイトリンク挿入・PR表記 → ブログに追加 → git push で自動公開
+# 事前に `income-agent init-site` でブログを作成し、GitHub に push しておきます。
 # ---------------------------------------------------------------------------
 [strategies.content_publisher]
 enabled = true
-niche = "在宅ワーク向けの業務効率化ツール"
-audience = "ITに詳しくない個人事業主・副業初心者"
+niche = "一人で仕事をしているフリーランスのためのAI時短術（ChatGPT等の生成AI、Notion、自動化ツール、請求・事務作業の効率化）"
+audience = "デザイナー・ライター・エンジニアなど一人で働くフリーランス。作業や事務に追われて時間がなく、AIを仕事に活かしたいがまだ使いこなせていない人"
 language = "ja"
+tags = ["フリーランス", "AI活用", "時短"]
+
+# ブログ（init-site の初期値にも使われます）
+site_dir = "site"
+site_title = "フリーランスのAI時短ラボ"
+site_description = "一人で働くフリーランスが、AIとツールで作業時間を減らすための実践ガイド。すぐ使えるプロンプトやテンプレートを紹介します。"
+author = "運営者"
+
+# 自動運用
+require_approval = false       # true にすると公開前に `income-agent approve` が必要
+deploy = "git"                 # "git": site_dir に commit & push して自動公開 / "none": コピーのみ
 articles_per_run = 1
-min_chars = 2500
-require_approval = true        # false にすると承認なしで publish_dir へ自動公開
-publish_dir = "site/content/posts"
-tags = ["効率化", "ツール"]
-affiliate_disclosure = "※本記事はアフィリエイト広告（PR）を含みます。"
+max_articles_per_day = 2       # 量産スパム扱いを避けるための1日の上限（公開済み＋承認待ち）
+
+# 品質チェック
+min_chars = 3000
+min_quality = 0.8              # AI編集長のスコアがこれ未満なら書き直し
+max_revisions = 2              # 書き直しの最大回数。それでも基準未満なら公開しない
+
 # 書きたいタイトルがあれば指定（なければLLMが企画）
-topics = []
+topics = [
+  "フリーランスの請求書作成をAIで5分に短縮する方法",
+  "ChatGPTでクライアントへの提案文・見積もりメールを作るプロンプト集",
+  "Notionでフリーランスの案件・タスク管理を一元化するテンプレートの作り方",
+]
 
-[[strategies.content_publisher.affiliate_links]]
-keyword = "Notion"
-url = "https://example.com/your-affiliate-link/notion"
-
-[[strategies.content_publisher.affiliate_links]]
-keyword = "Zapier"
-url = "https://example.com/your-affiliate-link/zapier"
+affiliate_disclosure = "※本記事はアフィリエイト広告（PR）を含みます。"
+# 自分のアフィリエイトリンクを登録すると、記事中で最初に出たキーワードがリンクになります。
+# 例（コメントを外して URL を差し替えてください。仮のURLのまま公開しないこと）:
+# [[strategies.content_publisher.affiliate_links]]
+# keyword = "Notion"
+# url = "https://（ASPで発行したリンク）"

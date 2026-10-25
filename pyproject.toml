@@ -20,7 +20,7 @@ income-agent = "income_agent.cli:main"
 include = ["income_agent*"]
 
 [tool.setuptools.package-data]
-income_agent = ["config.example.toml"]
+income_agent = ["config.example.toml", "site_template/**/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

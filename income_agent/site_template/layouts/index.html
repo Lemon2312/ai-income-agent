@@ -1,0 +1,9 @@
+{{ define "main" }}
+<section class="hero">
+  <h1>{{ site.Title }}</h1>
+  <p>{{ site.Params.description }}</p>
+</section>
+{{ $paginator := .Paginate (where site.RegularPages "Section" "posts") }}
+{{ partial "post-list.html" $paginator.Pages }}
+{{ partial "pager.html" $paginator }}
+{{ end }}

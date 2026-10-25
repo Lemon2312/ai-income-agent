@@ -7,11 +7,10 @@ import re
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from typing import Any, Protocol
 
 from income_agent.config import AgentConfig, LLMConfig
-from income_agent.storage import Store
+from income_agent.storage import Store, day_start_iso
 
 log = logging.getLogger(__name__)
 
@@ -112,11 +111,18 @@ class MockLLM:
                 "[mock] 作業時間を半分にする5つの方法",
                 "[mock] よくある失敗とその対策まとめ",
             ]}, ensure_ascii=False)
+        elif name == "review_article":
+            text = json.dumps({"score": 0.85, "issues": [],
+                               "description": "[mock] フリーランスがAIで作業時間を減らす方法を解説します。"},
+                              ensure_ascii=False)
+        elif name == "revise_article":
+            text = user.split("# 記事", 1)[-1].strip() or "[mock] 修正版"
         elif name == "write_article":
             title = re.search(r"タイトル:\s*(.+)", user)
             heading = title.group(1).strip() if title else "記事"
-            text = (f"# {heading}\n\n[mock] この記事では要点をわかりやすく解説します。\n\n"
-                    "## ポイント1\n\n本文...\n\n## ポイント2\n\n本文...\n\n## まとめ\n\n本文...\n")
+            filler = "これはオフライン動作確認用のモック本文です。実際のLLMに接続すると具体的な内容に置き換わります。" * 8
+            sections = "".join(f"## ポイント{i}\n\n{filler}\n\n" for i in range(1, 6))
+            text = f"# {heading}\n\n[mock] この記事では要点をわかりやすく解説します。\n\n{sections}## まとめ\n\n{filler}\n"
         else:
             text = "[mock] OK"
         return LLMResponse(text=text)
@@ -137,8 +143,8 @@ class BudgetedLLM:
         return self.inner.model
 
     def spent_today_usd(self) -> float:
-        today = datetime.now(timezone.utc).date().isoformat()
-        spent = self.store.total("cost", since=today, note_prefix=LLM_NOTE_PREFIX)
+        since = day_start_iso(self.agent_cfg.timezone)
+        spent = self.store.total("cost", since=since, note_prefix=LLM_NOTE_PREFIX)
         return spent / self.agent_cfg.usd_to_currency
 
     def remaining_usd(self) -> float:

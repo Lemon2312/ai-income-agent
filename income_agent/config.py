@@ -10,6 +10,7 @@ from typing import Any
 class AgentConfig:
     data_dir: Path
     interval_minutes: int = 60
+    timezone: str = "Asia/Tokyo"
     currency: str = "JPY"
     usd_to_currency: float = 150.0
     daily_llm_budget_usd: float = 1.0
@@ -55,7 +56,8 @@ def load_config(path: str | Path) -> Config:
 
     strategies = raw.get("strategies", {})
     for cfg in strategies.values():
-        if "publish_dir" in cfg:
-            cfg["publish_dir"] = str(_resolve(path.parent, cfg["publish_dir"]))
+        for key in ("publish_dir", "site_dir"):
+            if key in cfg:
+                cfg[key] = str(_resolve(path.parent, cfg[key]))
 
     return Config(path=path, agent=agent, llm=llm, strategies=strategies)
