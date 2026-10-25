@@ -82,7 +82,7 @@ class ScriptedReviewLLM(MockLLM):
         if "TASK: review_article" in system:
             score = self.scores.pop(0) if len(self.scores) > 1 else self.scores[0]
             return LLMResponse(f'{{"score": {score}, "issues": ["具体例が足りない"], "description": "d"}}')
-        if "TASK: revise_article" in system:
+        if "TASK: revise_section" in system:
             self.revisions += 1
             assert "具体例が足りない" in user
         return super().complete(system, user, json_mode=json_mode, max_tokens=max_tokens)
@@ -146,7 +146,7 @@ def test_full_cycle_queues_proposals_and_articles(tmp_path):
     assert [a.title for a in pending] == ["フリーランスの請求書作成をAIで5分に短縮する方法"]
     draft = Path(pending[0].payload["draft_path"]).read_text(encoding="utf-8")
     assert draft.startswith("---\ntitle:") and "description:" in draft
-    assert pending[0].payload["quality"] == pytest.approx(0.85)
+    assert pending[0].payload["quality"] == pytest.approx(0.84)
 
     agent.run_once()
     assert len([a for a in agent.store.list_actions(PENDING) if a.kind == "proposal"]) == 1
@@ -184,7 +184,7 @@ def test_quality_gate_revises_until_good_enough(tmp_path):
     agent = make_agent(tmp_path, llm=llm, scout=False)
     agent.run_once()
     article = articles(agent)[0]
-    assert llm.revisions == 2
+    assert llm.revisions == 2 * 5  # two rounds over 4 sections + summary (intro is kept)
     assert article.payload["quality_history"] == [0.5, 0.6, 0.9]
 
 
@@ -197,14 +197,22 @@ def test_quality_gate_discards_bad_articles(tmp_path):
     assert len(rejected) == 1 and rejected[0].payload["quality_history"] == [0.3, 0.3, 0.3]
     assert not posts_dir(tmp_path).exists()
 
-    # Rejected topics are not retried; the next run moves on to the next topic.
+    # A rejected topic gets one more attempt (max_attempts_per_topic = 2), then is dropped.
     agent.run_once()
-    titles = [a.title for a in agent.store.list_actions(REJECTED)]
-    assert len(set(titles)) == 2
+    agent.run_once()
+    titles = [a.title for a in reversed(agent.store.list_actions(REJECTED))]
+    assert titles[0] == titles[1] != titles[2]
+
+
+class TerseWriterLLM(MockLLM):
+    def complete(self, system, user, *, json_mode=False, max_tokens=1500):
+        if "TASK: write_section" in system:
+            return LLMResponse("短い本文です。")
+        return super().complete(system, user, json_mode=json_mode, max_tokens=max_tokens)
 
 
 def test_short_articles_fail_quality(tmp_path):
-    agent = make_agent(tmp_path, scout=False, min_chars="100000", max_revisions="0")
+    agent = make_agent(tmp_path, llm=TerseWriterLLM(), scout=False, max_revisions="0")
     agent.run_once()
     assert not articles(agent)
     rejected = agent.store.list_actions(REJECTED)[0]
@@ -218,6 +226,58 @@ def test_budget_stops_cycle_and_costs_are_recorded(tmp_path):
     assert result.budget_exhausted
     assert agent.llm.spent_today_usd() == pytest.approx(0.30)
     assert agent.store.total("cost") == pytest.approx(0.30 * 150)
+
+
+def test_article_is_written_section_by_section(tmp_path):
+    agent = make_agent(tmp_path, scout=False)
+    agent.run_once()
+    article = articles(agent)[0]
+    text = Path(article.payload["draft_path"]).read_text(encoding="utf-8")
+    headings = re.findall(r"^## (.+)$", text, flags=re.M)
+    assert headings == [f"[mock] 見出し{i}" for i in range(1, 5)] + ["まとめ"]
+    assert article.payload["chars"] >= 3000
+    assert article.payload["scores"]["accuracy"] == 5
+
+
+class FixedScoresLLM(MockLLM):
+    def __init__(self, scores):
+        self.scores = scores
+
+    def complete(self, system, user, *, json_mode=False, max_tokens=1500):
+        if "TASK: review_article" in system:
+            import json
+            return LLMResponse(json.dumps({"scores": self.scores, "issues": ["x"], "description": "d"}))
+        return super().complete(system, user, json_mode=json_mode, max_tokens=max_tokens)
+
+
+def test_rubric_scoring_and_compliance_veto(tmp_path):
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    good = make_agent(tmp_path / "a", llm=FixedScoresLLM(
+        {"usefulness": 4, "accuracy": 4, "depth": 4, "readability": 4, "compliance": 4}), scout=False)
+    good.run_once()
+    assert articles(good)[0].payload["quality"] == pytest.approx(0.8)
+
+    bad = make_agent(tmp_path / "b", llm=FixedScoresLLM(
+        {"usefulness": 5, "accuracy": 5, "depth": 5, "readability": 5, "compliance": 1}), scout=False,
+        max_revisions="0")
+    bad.run_once()
+    assert not articles(bad)
+    assert bad.store.list_actions(REJECTED)[0].payload["quality"] == 0.0
+
+
+class ShrinkingReviserLLM(ScriptedReviewLLM):
+    def complete(self, system, user, *, json_mode=False, max_tokens=1500):
+        if "TASK: revise_section" in system:
+            return LLMResponse("短い")
+        return super().complete(system, user, json_mode=json_mode, max_tokens=max_tokens)
+
+
+def test_revisions_that_shrink_a_section_are_discarded(tmp_path):
+    agent = make_agent(tmp_path, llm=ShrinkingReviserLLM([0.5, 0.9]), scout=False)
+    agent.run_once()
+    text = Path(articles(agent)[0].payload["draft_path"]).read_text(encoding="utf-8")
+    assert "短い" not in text
 
 
 # --- site & deploy -----------------------------------------------------------
@@ -334,7 +394,7 @@ def test_cli_end_to_end(tmp_path, capsys):
     c = str(make_config(tmp_path, scout=False))
     assert main(["-c", c, "run", "--once"]) == 0
     assert main(["-c", c, "queue"]) == 0
-    assert "quality=0.85" in capsys.readouterr().out
+    assert "quality=0.84" in capsys.readouterr().out
     assert main(["-c", c, "show", "1"]) == 0
     assert main(["-c", c, "approve", "1"]) == 0
     assert main(["-c", c, "revenue", "add", "12000", "--strategy", "content_publisher"]) == 0
