@@ -270,6 +270,12 @@ def test_repo_agent_config_has_study_guidelines():
     publisher = cfg.strategies["content_publisher"]
     assert "理系大学生" in publisher["niche"]
     assert any("不正行為" in g for g in publisher["guidelines"])
+    assert publisher["max_articles_per_day"] == 1
+    assert any("捏造" in g for g in publisher["guidelines"])
+    assert any("実在しない" in g for g in publisher["guidelines"])
+    categories = tomllib.loads((Path(__file__).resolve().parent.parent / "site" / "data" / "categories.toml")
+                               .read_text(encoding="utf-8"))
+    assert "研究" in categories
 
 
 class FixedScoresLLM(MockLLM):
