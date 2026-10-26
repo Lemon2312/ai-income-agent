@@ -239,6 +239,38 @@ def test_article_is_written_section_by_section(tmp_path):
     assert article.payload["scores"]["accuracy"] == 5
 
 
+class RecordingLLM(MockLLM):
+    def __init__(self):
+        self.calls: list[tuple[str, str]] = []
+
+    def complete(self, system, user, *, json_mode=False, max_tokens=1500):
+        self.calls.append((system, user))
+        return super().complete(system, user, json_mode=json_mode, max_tokens=max_tokens)
+
+
+def test_guidelines_reach_every_stage(tmp_path):
+    cfg_path = make_config(tmp_path, scout=False)
+    text = re.sub(r"^topics = \[.*?\]\n", "topics = []\n", cfg_path.read_text(encoding="utf-8"),
+                  flags=re.S | re.M)
+    text = text.replace(
+        "[strategies.content_publisher]\n",
+        '[strategies.content_publisher]\nguidelines = ["レポートの代筆につながる方法は紹介しない"]\n')
+    cfg_path.write_text(text, encoding="utf-8")
+    llm = RecordingLLM()
+    Agent(load_config(cfg_path), llm=llm, fetch=lambda url: RSS).run_once()
+
+    tasks = {re.search(r"TASK: (\w+)", s).group(1) for s, u in llm.calls
+             if "レポートの代筆につながる方法は紹介しない" in u}
+    assert {"ideate_topics", "outline_article", "write_section", "review_article"} <= tasks
+
+
+def test_repo_agent_config_has_study_guidelines():
+    cfg = load_config(Path(__file__).resolve().parent.parent / "agent.toml")
+    publisher = cfg.strategies["content_publisher"]
+    assert "理系大学生" in publisher["niche"]
+    assert any("不正行為" in g for g in publisher["guidelines"])
+
+
 class FixedScoresLLM(MockLLM):
     def __init__(self, scores):
         self.scores = scores

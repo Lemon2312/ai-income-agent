@@ -47,7 +47,7 @@ REVIEW_SYSTEM = """TASK: review_article
 - accuracy: 事実の正確さ。でっち上げの数値・機能・料金があれば1〜2点
 - depth: 一般論だけの薄い内容になっていないか
 - readability: 構成・読みやすさ
-- compliance: 誇大表現・断定的な医療/法律/投資助言・規約違反がないか（あれば1点）
+- compliance: 誇大表現・断定的な医療/法律/投資助言・規約違反・「執筆ルール」への違反がないか（あれば1点）
 注意:
 - 料金や細かい仕様など変わりやすい情報は、記載がなくても減点しない（「公式サイトで確認」の案内があれば十分）
 - issues には、どの見出しをどう直すべきかを具体的に書く（4点以上の項目については書かなくてよい）
@@ -176,16 +176,22 @@ class ContentPublisher(Strategy):
             IDEATE_SYSTEM,
             f"ジャンル: {self.cfg.get('niche', '')}\n想定読者: {self.cfg.get('audience', '')}\n"
             f"必要数: {count * 3}\n"
-            f"既存タイトル:\n{json.dumps(sorted(existing), ensure_ascii=False)}",
+            f"既存タイトル:\n{json.dumps(sorted(existing), ensure_ascii=False)}"
+            + self._guidelines(),
             strategy=self.name,
         )
         ideas = [str(t).strip() for t in result.get("topics", []) if str(t).strip()]
         fresh = [t for t in ideas if t not in existing and t not in planned]
         return (planned + fresh)[:count]
 
+    def _guidelines(self) -> str:
+        rules = [str(g) for g in self.cfg.get("guidelines", [])]
+        return "\n# このブログの執筆ルール（必ず守る）\n" + "\n".join(f"- {r}" for r in rules) if rules else ""
+
     def _brief(self, title: str) -> str:
         return (f"タイトル: {title}\nジャンル: {self.cfg.get('niche', '')}\n"
-                f"想定読者: {self.cfg.get('audience', '')}\n言語: {self.cfg.get('language', 'ja')}")
+                f"想定読者: {self.cfg.get('audience', '')}\n言語: {self.cfg.get('language', 'ja')}"
+                + self._guidelines())
 
     def _outline(self, title: str) -> list[dict[str, Any]]:
         """Plans the article as intro + 4-6 sections + summary. Writing each part in
