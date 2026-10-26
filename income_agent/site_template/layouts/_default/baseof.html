@@ -26,6 +26,7 @@
       if (t === "dark" || (!t && matchMedia("(prefers-color-scheme: dark)").matches)) d.dataset.theme = "dark";
     })();
   </script>
+  <link rel="icon" href="{{ "favicon.svg" | relURL }}" type="image/svg+xml">
   <link rel="stylesheet" href="{{ "style.css" | relURL }}">
   <script src="{{ "app.js" | relURL }}" defer></script>
 </head>
