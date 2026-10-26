@@ -15,6 +15,14 @@ ctaURL = ""
 
 [taxonomies]
 tag = "tags"
+category = "categories"
+
+[markup.tableOfContents]
+startLevel = 2
+endLevel = 3
+
+[pagination]
+pagerSize = 12
 
 [[menus.main]]
 name = "運営者情報"

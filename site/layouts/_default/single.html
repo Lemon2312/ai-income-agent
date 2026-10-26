@@ -1,28 +1,54 @@
 {{ define "main" }}
+{{ $isPost := eq .Section "posts" }}
 <article class="post">
+  {{ if $isPost }}
+  {{ $meta := partial "cat-meta.html" . }}
+  <header class="post-header">
+    {{ partial "cover.html" (dict "page" . "class" "cover-hero") }}
+    <div class="post-header-body">
+      {{ with $meta.name }}{{ with site.GetPage (printf "/categories/%s" .) }}<a class="badge" style="--h: {{ $meta.hue }}" href="{{ .RelPermalink }}">{{ .Title }}</a>{{ else }}<span class="badge" style="--h: {{ $meta.hue }}">{{ . }}</span>{{ end }}{{ end }}
+      <h1>{{ .Title }}</h1>
+      <p class="meta">
+        <time datetime="{{ .Date.Format "2006-01-02" }}">{{ .Date.Format "2006年1月2日" }}</time>
+        <span>約{{ .ReadingTime }}分で読めます</span>
+        {{ range .GetTerms "tags" }}<a class="tag" href="{{ .RelPermalink }}">#{{ .LinkTitle }}</a>{{ end }}
+      </p>
+    </div>
+  </header>
+  {{ else }}
   <h1>{{ .Title }}</h1>
-  {{ if eq .Section "posts" }}
-  <p class="meta">
-    <time datetime="{{ .Date.Format "2006-01-02" }}">{{ .Date.Format "2006年1月2日" }}</time>
-    {{ range .GetTerms "tags" }}<a class="tag" href="{{ .RelPermalink }}">#{{ .LinkTitle }}</a>{{ end }}
-  </p>
   {{ end }}
-  <div class="content">{{ .Content }}</div>
 
-  {{ if and (eq .Section "posts") site.Params.ctaURL }}
-  <aside class="cta">
+  <div class="post-layout{{ if and $isPost (ne .TableOfContents `<nav id="TableOfContents"></nav>`) }} has-toc{{ end }}">
+    {{ if and $isPost (ne .TableOfContents `<nav id="TableOfContents"></nav>`) }}
+    <aside class="toc">
+      <details open>
+        <summary>目次</summary>
+        {{ .TableOfContents }}
+      </details>
+    </aside>
+    {{ end }}
+    <div class="content">{{ .Content }}</div>
+  </div>
+
+  {{ if and $isPost site.Params.ctaURL }}
+  <aside class="cta reveal">
     <h2>{{ site.Params.ctaTitle }}</h2>
     <p>{{ site.Params.ctaText }}</p>
     <a class="button" href="{{ site.Params.ctaURL }}">詳しく見る</a>
   </aside>
   {{ end }}
 
-  {{ if eq .Section "posts" }}
+  {{ if $isPost }}
+  <nav class="prev-next">
+    {{ with .PrevInSection }}<a class="pn pn-prev reveal" href="{{ .RelPermalink }}"><span>← 前の記事</span>{{ .Title }}</a>{{ end }}
+    {{ with .NextInSection }}<a class="pn pn-next reveal" href="{{ .RelPermalink }}"><span>次の記事 →</span>{{ .Title }}</a>{{ end }}
+  </nav>
   {{ with site.RegularPages.Related . | first 3 }}
-  <aside class="related">
+  <section class="related">
     <h2>関連記事</h2>
-    {{ partial "post-list.html" . }}
-  </aside>
+    <div class="card-grid">{{ range . }}{{ partial "card.html" . }}{{ end }}</div>
+  </section>
   {{ end }}
   {{ end }}
 </article>

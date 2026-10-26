@@ -1,0 +1,12 @@
+{{- /* Generated eyecatch: category colour and glyph, with decoration positions derived
+       from the title so every post looks different without any image files. */ -}}
+{{- $p := .page -}}
+{{- $meta := partial "cat-meta.html" $p -}}
+{{- $h := hash.FNV32a $p.Title -}}
+<div class="cover {{ .class }}" aria-hidden="true"
+     style="--h: {{ $meta.hue }}; --s: {{ mod $h 36 }}; --x1: {{ mod $h 70 }}%; --y1: {{ mod (div $h 7) 60 }}%; --x2: {{ mod (div $h 13) 80 }}%; --y2: {{ mod (div $h 31) 70 }}%; --r: {{ mod (div $h 3) 360 }}deg">
+  <span class="orb orb-1"></span>
+  <span class="orb orb-2"></span>
+  <span class="ring"></span>
+  <span class="cover-glyph">{{ $meta.glyph }}</span>
+</div>
