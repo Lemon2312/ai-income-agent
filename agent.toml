@@ -43,7 +43,7 @@ fail_on_deploy_error = true    # 公開に失敗したら実行を失敗扱い�
 require_approval = false       # 承認は上の deploy で行うため false のまま
 
 articles_per_run = 1
-max_articles_per_day = 2       # 1日の上限（プルリクエストで届いた記事も数える）
+max_articles_per_day = 1       # 1日の上限（プルリクエストで届いた記事も数える）
 
 # 品質チェック: AI編集長が5項目（実用性・正確性・深さ・読みやすさ・表現の適切さ）を5点満点で採点。
 # 平均4点（= 0.8）以上で合格。未満なら見出しごとに書き直し、それでもダメなら公開しない
