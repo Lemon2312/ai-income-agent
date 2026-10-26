@@ -8,6 +8,14 @@
     {{ $count := len (where site.RegularPages "Section" "posts") }}
     <p class="hero-stats"><span><strong>{{ $count }}</strong>記事</span><span><strong>{{ len site.Taxonomies.categories }}</strong>カテゴリ</span></p>
   </div>
+  {{ with site.Params.mascotMessages }}
+  <div class="hero-mascot" data-messages="{{ jsonify . }}">
+    <p class="hero-bubble" aria-live="polite">{{ index . 0 }}</p>
+    <button class="hero-mascot-btn" type="button" aria-label="{{ site.Params.mascotName | default "ポコ" }}に話しかける">
+      {{ partial "mascot.html" (dict "class" "hero-mascot-svg") }}
+    </button>
+  </div>
+  {{ end }}
 </section>
 
 {{ partial "chips.html" (dict "class" "home-cats") }}
