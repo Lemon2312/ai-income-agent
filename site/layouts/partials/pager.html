@@ -1,7 +1,7 @@
 {{ if gt .TotalPages 1 }}
 <nav class="pager">
-  {{ with .Prev }}<a href="{{ .URL }}">&larr; 新しい記事</a>{{ end }}
+  {{ with .Prev }}<a class="pager-btn" href="{{ .URL }}">&larr; 新しい記事</a>{{ end }}
   <span>{{ .PageNumber }} / {{ .TotalPages }}</span>
-  {{ with .Next }}<a href="{{ .URL }}">古い記事 &rarr;</a>{{ end }}
+  {{ with .Next }}<a class="pager-btn" href="{{ .URL }}">古い記事 &rarr;</a>{{ end }}
 </nav>
 {{ end }}
