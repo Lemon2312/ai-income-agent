@@ -42,3 +42,9 @@ glyph = "✓"
 hue = 45
 weight = 70
 description = "計画づくりから復習まで"
+
+["研究"]
+glyph = "⚗"
+hue = 95
+weight = 65
+description = "卒業研究・文献調査・データ解析・発表準備"
