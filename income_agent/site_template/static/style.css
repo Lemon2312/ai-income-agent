@@ -335,6 +335,9 @@ html:not(.js) .to-top { display: none; }
   box-shadow: 0 8px 24px rgba(0, 0, 0, .18); transition: opacity .25s, transform .25s;
 }
 .hero-bubble::after { content: ""; position: absolute; left: 50%; bottom: -8px; border: 8px solid transparent; border-bottom: 0; border-top-color: #fff; transform: translateX(-50%); }
+/* Every message sits in the same grid cell, so the bubble is always as tall as the longest one */
+.hero-bubble > span { grid-area: 1 / 1; }
+.hero-bubble-sizer { visibility: hidden; }
 .hero-bubble.is-changing { opacity: 0; transform: translateY(4px); }
 
 .poko-say { display: flex; align-items: flex-end; gap: 14px; margin: 1.8em 0; }
