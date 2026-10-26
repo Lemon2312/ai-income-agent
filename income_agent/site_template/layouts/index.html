@@ -10,7 +10,10 @@
   </div>
   {{ with site.Params.mascotMessages }}
   <div class="hero-mascot" data-messages="{{ jsonify . }}">
-    <p class="hero-bubble" aria-live="polite">{{ index . 0 }}</p>
+    <p class="hero-bubble">
+      {{- range . }}<span class="hero-bubble-sizer" aria-hidden="true">{{ . }}</span>{{ end -}}
+      <span class="hero-bubble-text" aria-live="polite">{{ index . 0 }}</span>
+    </p>
     <button class="hero-mascot-btn" type="button" aria-label="{{ site.Params.mascotName | default "ポコ" }}に話しかける">
       {{ partial "mascot.html" (dict "class" "hero-mascot-svg") }}
     </button>

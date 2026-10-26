@@ -94,13 +94,14 @@
   if (mascot) {
     var messages = JSON.parse(mascot.dataset.messages || "[]");
     var bubble = mascot.querySelector(".hero-bubble");
+    var bubbleText = bubble.querySelector(".hero-bubble-text");
     var btn = mascot.querySelector(".hero-mascot-btn");
     var current = 0, timer = null;
     var say = function (i) {
       current = (i + messages.length) % messages.length;
       bubble.classList.add("is-changing");
       setTimeout(function () {
-        bubble.textContent = messages[current];
+        bubbleText.textContent = messages[current];
         bubble.classList.remove("is-changing");
       }, reduceMotion ? 0 : 220);
     };
