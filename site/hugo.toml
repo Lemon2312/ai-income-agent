@@ -7,7 +7,7 @@ summaryLength = 60
 
 [params]
 description = "一人で働くフリーランスが、AIとツールで作業時間を減らすための実践ガイド。すぐ使えるプロンプトやテンプレートを紹介します。"
-author = "Lemon"
+author = "LK"
 # 記事末尾に表示する案内（デジタル商品やツールへの導線）。空なら非表示。
 ctaTitle = ""
 ctaText = ""
