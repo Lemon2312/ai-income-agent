@@ -269,22 +269,6 @@ def test_repo_agent_config_has_study_guidelines():
     publisher = cfg.strategies["content_publisher"]
     assert "理系大学生" in publisher["niche"]
     assert any("不正行為" in g for g in publisher["guidelines"])
-    assert any("アニメーション" in t for t in publisher["author_tips"])
-
-
-def test_author_tips_are_offered_as_optional_context(tmp_path):
-    cfg_path = make_config(tmp_path, scout=False)
-    text = cfg_path.read_text(encoding="utf-8").replace(
-        "[strategies.content_publisher]\n",
-        '[strategies.content_publisher]\nauthor_tips = ["別タブで聞く"]\n', 1)
-    text = re.sub(r'^author = .*$', 'author = "LK"', text, count=1, flags=re.M)
-    cfg_path.write_text(text, encoding="utf-8")
-    llm = RecordingLLM()
-    Agent(load_config(cfg_path), llm=llm, fetch=lambda url: RSS).run_once()
-    section_prompts = [u for s, u in llm.calls if "TASK: write_section" in s]
-    assert section_prompts and all("別タブで聞く" in u for u in section_prompts)
-    assert "LKが実際にやっている方法" in section_prompts[0]
-    assert "無関係なら使わない" in section_prompts[0]
 
 
 class FixedScoresLLM(MockLLM):

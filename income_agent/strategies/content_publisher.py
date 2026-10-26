@@ -186,15 +186,7 @@ class ContentPublisher(Strategy):
 
     def _guidelines(self) -> str:
         rules = [str(g) for g in self.cfg.get("guidelines", [])]
-        text = "\n# このブログの執筆ルール（必ず守る）\n" + "\n".join(f"- {r}" for r in rules) if rules else ""
-        tips = [str(t) for t in self.cfg.get("author_tips", [])]
-        if tips:
-            author = self.cfg.get("author", "運営者")
-            text += (f"\n# 運営者（{author}）が実際に使っているコツ\n"
-                     "記事のテーマに本当に関係する場合だけ、1記事に1〜2個まで、"
-                     f"「{author}が実際にやっている方法」として自然に紹介してよい。無関係なら使わない。\n"
-                     + "\n".join(f"- {t}" for t in tips))
-        return text
+        return "\n# このブログの執筆ルール（必ず守る）\n" + "\n".join(f"- {r}" for r in rules) if rules else ""
 
     def _brief(self, title: str) -> str:
         return (f"タイトル: {title}\nジャンル: {self.cfg.get('niche', '')}\n"
