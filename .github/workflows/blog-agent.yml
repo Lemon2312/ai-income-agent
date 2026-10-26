@@ -2,7 +2,8 @@ name: Blog agent
 
 on:
   schedule:
-    - cron: "0 0,9 * * *"   # 毎日 9:00 と 18:00（日本時間）。GitHub の混雑で数十分遅れることがあります
+    # 毎日 9:23 と 18:23（日本時間）。毎時0分は GitHub が混雑して実行が飛ばされやすいため、ずらしている
+    - cron: "23 0,9 * * *"
   workflow_dispatch:         # Actions タブの「Run workflow」で手動実行
 
 permissions:
