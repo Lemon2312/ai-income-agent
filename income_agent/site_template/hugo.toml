@@ -13,6 +13,16 @@ ctaTitle = ""
 ctaText = ""
 ctaURL = ""
 
+# マスコット「ポコ」。トップページで話すことば（クリックで切り替わる）と、記事の最後のひとこと。
+# mascotMessages を空にするとトップページには表示されません
+mascotName = "ポコ"
+mascotMessages = [
+  "いっしょに学ぼう！",
+  "気になる記事から読んでみてね",
+  "考えごとをすると、ぼくの泡がポコポコ出るんだ",
+]
+mascotOutro = "最後まで読んでくれてありがとう！ 気になったことは、ぜひ試してみてね。"
+
 [taxonomies]
 tag = "tags"
 category = "categories"

@@ -90,6 +90,35 @@
     }
   }
 
+  var mascot = document.querySelector(".hero-mascot");
+  if (mascot) {
+    var messages = JSON.parse(mascot.dataset.messages || "[]");
+    var bubble = mascot.querySelector(".hero-bubble");
+    var btn = mascot.querySelector(".hero-mascot-btn");
+    var current = 0, timer = null;
+    var say = function (i) {
+      current = (i + messages.length) % messages.length;
+      bubble.classList.add("is-changing");
+      setTimeout(function () {
+        bubble.textContent = messages[current];
+        bubble.classList.remove("is-changing");
+      }, reduceMotion ? 0 : 220);
+    };
+    var schedule = function () {
+      clearInterval(timer);
+      if (!reduceMotion && messages.length > 1) timer = setInterval(function () { say(current + 1); }, 8000);
+    };
+    btn.addEventListener("click", function () {
+      say(current + 1);
+      btn.classList.remove("is-jumping");
+      void btn.offsetWidth;
+      btn.classList.add("is-jumping");
+      schedule();
+    });
+    btn.addEventListener("animationend", function () { btn.classList.remove("is-jumping"); });
+    schedule();
+  }
+
   var canvas = document.querySelector(".hero-canvas");
   if (canvas && canvas.getContext) molecules(canvas);
 
