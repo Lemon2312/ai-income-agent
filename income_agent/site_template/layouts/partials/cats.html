@@ -1,0 +1,6 @@
+{{- /* Categories from data/categories.toml as a slice sorted by weight. */ -}}
+{{- $cats := slice -}}
+{{- range $name, $meta := site.Data.categories -}}
+  {{- $cats = $cats | append (merge $meta (dict "name" $name)) -}}
+{{- end -}}
+{{- return (sort $cats "weight") -}}

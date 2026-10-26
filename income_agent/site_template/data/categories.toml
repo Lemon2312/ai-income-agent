@@ -1,0 +1,20 @@
+# カテゴリごとの表紙の記号と色（hue: 0〜360の色相）。記事の categories と同じ名前にする
+# 並び順は weight の小さい順。エージェントはここから記事に合うカテゴリを1つ選びます
+
+["はじめての方へ"]
+glyph = "★"
+hue = 172
+weight = 10
+description = "基本の考え方と最初の一歩"
+
+["活用術"]
+glyph = "⚙"
+hue = 220
+weight = 20
+description = "すぐ試せる具体的な使い方"
+
+["ツール比較"]
+glyph = "⇄"
+hue = 262
+weight = 30
+description = "目的に合った道具の選び方"

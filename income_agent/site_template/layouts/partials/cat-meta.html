@@ -1,0 +1,6 @@
+{{- /* Glyph and hue for a page's first category, with a fallback for uncategorised posts. */ -}}
+{{- $name := "" -}}
+{{- with .Params.categories }}{{ $name = index . 0 }}{{ end -}}
+{{- $meta := dict "name" $name "glyph" "AI" "hue" 172 -}}
+{{- with index site.Data.categories $name }}{{ $meta = merge $meta . }}{{ end -}}
+{{- return $meta -}}

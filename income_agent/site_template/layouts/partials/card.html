@@ -1,0 +1,15 @@
+{{- $meta := partial "cat-meta.html" . -}}
+<article class="card reveal">
+  <a class="card-link" href="{{ .RelPermalink }}">
+    {{ partial "cover.html" (dict "page" . "class" "cover-card") }}
+    <div class="card-body">
+      {{ with $meta.name }}<span class="badge" style="--h: {{ $meta.hue }}">{{ . }}</span>{{ end }}
+      <h2 class="card-title">{{ .Title }}</h2>
+      <p class="card-desc">{{ .Description | default .Summary | plainify | truncate 80 }}</p>
+      <p class="card-meta">
+        <time datetime="{{ .Date.Format "2006-01-02" }}">{{ .Date.Format "2006.01.02" }}</time>
+        <span>約{{ .ReadingTime }}分で読めます</span>
+      </p>
+    </div>
+  </a>
+</article>

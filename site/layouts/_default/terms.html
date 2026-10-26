@@ -1,0 +1,32 @@
+{{ define "main" }}
+<header class="list-header">
+  <h1 class="page-title">{{ if eq .Data.Plural "categories" }}カテゴリ{{ else }}{{ .Title }}{{ end }}</h1>
+</header>
+{{ if eq .Data.Plural "categories" }}
+<div class="cat-grid">
+  {{ range $c := partial "cats.html" . }}
+    {{ $term := false }}
+    {{ range site.Taxonomies.categories }}{{ if eq .Page.Title $c.name }}{{ $term = . }}{{ end }}{{ end }}
+    {{ if $term }}
+    <a class="cat-card reveal" style="--h: {{ $c.hue }}" href="{{ $term.Page.RelPermalink }}">
+      <span class="cat-glyph" aria-hidden="true">{{ $c.glyph }}</span>
+      <h2>{{ $c.name }}</h2>
+      <p>{{ $c.description }}</p>
+      <span class="cat-count">{{ $term.Count }}記事</span>
+    </a>
+    {{ else }}
+    <div class="cat-card reveal is-empty" style="--h: {{ $c.hue }}">
+      <span class="cat-glyph" aria-hidden="true">{{ $c.glyph }}</span>
+      <h2>{{ $c.name }}</h2>
+      <p>{{ $c.description }}</p>
+      <span class="cat-count">準備中</span>
+    </div>
+    {{ end }}
+  {{ end }}
+</div>
+{{ else }}
+<nav class="chips">
+  {{ range .Data.Terms.ByCount }}<a class="chip" href="{{ .Page.RelPermalink }}">#{{ .Page.Title }}<span class="chip-count">{{ .Count }}</span></a>{{ end }}
+</nav>
+{{ end }}
+{{ end }}
