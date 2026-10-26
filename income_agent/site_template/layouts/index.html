@@ -1,9 +1,40 @@
 {{ define "main" }}
 <section class="hero">
-  <h1>{{ site.Title }}</h1>
-  <p>{{ site.Params.description }}</p>
+  <canvas class="hero-canvas" aria-hidden="true"></canvas>
+  <div class="hero-inner">
+    <p class="hero-kicker">Science × AI Study Lab</p>
+    <h1>{{ site.Title }}</h1>
+    <p class="hero-lead">{{ site.Params.description }}</p>
+    {{ $count := len (where site.RegularPages "Section" "posts") }}
+    <p class="hero-stats"><span><strong>{{ $count }}</strong>記事</span><span><strong>{{ len site.Taxonomies.categories }}</strong>カテゴリ</span></p>
+  </div>
 </section>
+
+{{ partial "chips.html" (dict "class" "home-cats") }}
+
 {{ $paginator := .Paginate (where site.RegularPages "Section" "posts") }}
-{{ with $paginator.Pages }}{{ partial "post-list.html" . }}{{ else }}<p>最初の記事を準備中です。</p>{{ end }}
+{{ with $paginator.Pages }}
+  {{ if eq $paginator.PageNumber 1 }}
+  {{ $first := index . 0 }}
+  {{ $meta := partial "cat-meta.html" $first }}
+  <section class="featured reveal">
+    <a class="featured-link" href="{{ $first.RelPermalink }}">
+      {{ partial "cover.html" (dict "page" $first "class" "cover-featured") }}
+      <div class="featured-body">
+        <span class="featured-label">最新記事</span>
+        {{ with $meta.name }}<span class="badge" style="--h: {{ $meta.hue }}">{{ . }}</span>{{ end }}
+        <h2>{{ $first.Title }}</h2>
+        <p>{{ $first.Description | default $first.Summary | plainify | truncate 120 }}</p>
+        <p class="card-meta"><time datetime="{{ $first.Date.Format "2006-01-02" }}">{{ $first.Date.Format "2006.01.02" }}</time><span>約{{ $first.ReadingTime }}分で読めます</span></p>
+      </div>
+    </a>
+  </section>
+  {{ with after 1 . }}<div class="card-grid">{{ range . }}{{ partial "card.html" . }}{{ end }}</div>{{ end }}
+  {{ else }}
+  <div class="card-grid">{{ range . }}{{ partial "card.html" . }}{{ end }}</div>
+  {{ end }}
+{{ else }}
+<p class="empty">最初の記事を準備中です。</p>
+{{ end }}
 {{ partial "pager.html" $paginator }}
 {{ end }}

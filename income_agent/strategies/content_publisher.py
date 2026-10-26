@@ -4,6 +4,7 @@ import hashlib
 import json
 import re
 import shutil
+import tomllib
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -30,9 +31,10 @@ OUTLINE_SYSTEM = f"""TASK: outline_article
 - 読者が検索した悩みに順番に答える流れにする
 - 本文の見出し（h2）は4〜6個。「まとめ」は含めない
 - 各見出しに、書くべき具体的な内容（手順、例、テンプレート、注意点など）を2〜4個挙げる
+- 「カテゴリ候補」があれば、記事に最も合うものを1つ選び、候補の表記のまま category に入れる
 {RULES}
 必ず次のJSONのみを返してください:
-{{"intro": "導入で伝えること", "sections": [{{"heading": "見出し", "points": ["書く内容", ...]}}, ...]}}"""
+{{"intro": "導入で伝えること", "category": "カテゴリ名", "sections": [{{"heading": "見出し", "points": ["書く内容", ...]}}, ...]}}"""
 
 SECTION_SYSTEM = f"""TASK: write_section
 あなたは読者目線で正確な記事を書くライターです。記事のうち、指定された1つのパートだけをMarkdownで書いてください。
@@ -193,10 +195,28 @@ class ContentPublisher(Strategy):
                 f"想定読者: {self.cfg.get('audience', '')}\n言語: {self.cfg.get('language', 'ja')}"
                 + self._guidelines())
 
-    def _outline(self, title: str) -> list[dict[str, Any]]:
+    def _categories(self) -> list[str]:
+        """Category names from the config, or else from the site's data/categories.toml
+        (the same file the theme uses for category colours and icons)."""
+        if "categories" in self.cfg:
+            return [str(c) for c in self.cfg["categories"]]
+        data = self.site_dir / "data" / "categories.toml" if self.site_dir else None
+        if not data or not data.exists():
+            return []
+        cats = tomllib.loads(data.read_text(encoding="utf-8"))
+        return sorted(cats, key=lambda name: cats[name].get("weight", 0) if isinstance(cats[name], dict) else 0)
+
+    def _outline(self, title: str) -> tuple[list[dict[str, Any]], str | None]:
         """Plans the article as intro + 4-6 sections + summary. Writing each part in
         its own call keeps small models from stopping long before the target length."""
-        plan = self.ctx.llm.complete_json(OUTLINE_SYSTEM, self._brief(title), strategy=self.name)
+        categories = self._categories()
+        brief = self._brief(title)
+        if categories:
+            brief += "\n# カテゴリ候補\n" + "\n".join(f"- {c}" for c in categories)
+        plan = self.ctx.llm.complete_json(OUTLINE_SYSTEM, brief, strategy=self.name)
+        category = str(plan.get("category", "")).strip()
+        if categories and category not in categories:
+            category = str(self.cfg.get("default_category", categories[0]))
         sections = [s for s in plan.get("sections", []) if isinstance(s, dict) and s.get("heading")]
         if not sections:
             raise LLMError("outline has no sections")
@@ -211,7 +231,7 @@ class ContentPublisher(Strategy):
                    "target": per_section} for s in sections]
         parts.append({"heading": "まとめ", "points": ["要点の振り返り", "読者が今日からできる次の一歩"],
                       "target": 300})
-        return parts
+        return parts, category or None
 
     def _part_prompt(self, title: str, parts: list[dict[str, Any]], part: dict[str, Any]) -> str:
         toc = "\n".join(f"- {p['heading']}" for p in parts if p["heading"])
@@ -277,7 +297,7 @@ class ContentPublisher(Strategy):
         min_quality = float(self.cfg.get("min_quality", 0.8))
         max_revisions = int(self.cfg.get("max_revisions", 2))
 
-        parts = self._outline(title)
+        parts, category = self._outline(title)
         self._write_parts(title, parts)
         body = self._assemble(title, parts)
         review = self._review(title, body)
@@ -290,7 +310,7 @@ class ContentPublisher(Strategy):
             review = self._review(title, body)
             history.append(review["score"])
 
-        path = self._save_draft(title, body, review["description"])
+        path = self._save_draft(title, body, review["description"], category)
         payload: dict[str, Any] = {"draft_path": str(path), "quality": review["score"],
                                    "quality_history": history, "scores": review["scores"],
                                    "issues": review["issues"], "chars": _body_chars(body)}
@@ -308,7 +328,7 @@ class ContentPublisher(Strategy):
         self.log.info(self._publish(path, title, payload))
         return action_id
 
-    def _save_draft(self, title: str, body: str, description: str) -> Path:
+    def _save_draft(self, title: str, body: str, description: str, category: str | None = None) -> Path:
         body = re.sub(r"\A# .*\n+", "", body.strip())
         body, link_count = insert_affiliate_links(body, self.cfg.get("affiliate_links", []))
         if link_count:
@@ -322,7 +342,8 @@ class ContentPublisher(Strategy):
             f"title: {json.dumps(title, ensure_ascii=False)}\n"
             f"date: {now}\n"
             f"description: {json.dumps(description, ensure_ascii=False)}\n"
-            f"tags: {json.dumps(self.cfg.get('tags', []), ensure_ascii=False)}\n"
+            + (f"categories: {json.dumps([category], ensure_ascii=False)}\n" if category else "")
+            +             f"tags: {json.dumps(self.cfg.get('tags', []), ensure_ascii=False)}\n"
             "---\n\n"
         )
         self.drafts_dir.mkdir(parents=True, exist_ok=True)

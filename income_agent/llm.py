@@ -117,7 +117,8 @@ class MockLLM:
                                "description": "[mock] フリーランスがAIで作業時間を減らす方法を解説します。"},
                               ensure_ascii=False)
         elif name == "outline_article":
-            text = json.dumps({"intro": "[mock] 導入", "sections": [
+            category = re.search(r"# カテゴリ候補\n- (.+)", user)
+            text = json.dumps({"intro": "[mock] 導入", "category": category.group(1) if category else "", "sections": [
                 {"heading": f"[mock] 見出し{i}", "points": ["手順", "例"]} for i in range(1, 5)
             ]}, ensure_ascii=False)
         elif name in ("write_section", "revise_section"):

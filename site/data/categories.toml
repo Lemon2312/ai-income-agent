@@ -1,0 +1,44 @@
+# カテゴリごとの表紙の記号と色（hue: 0〜360の色相）。記事の categories と同じ名前にする
+# 並び順は weight の小さい順
+
+["勉強法"]
+glyph = "Δ"
+hue = 262
+weight = 10
+description = "AIを使った理解のしかた・勉強の進め方"
+
+["数学・物理"]
+glyph = "∫"
+hue = 220
+weight = 20
+description = "数式や物理現象をAIで深く理解する"
+
+["化学・生物"]
+glyph = "H₂O"
+hue = 160
+weight = 30
+description = "反応や生命現象をイメージでつかむ"
+
+["英語・論文"]
+glyph = "Aa"
+hue = 25
+weight = 40
+description = "英語論文や英語学習にAIを活かす"
+
+["プログラミング"]
+glyph = "</>"
+hue = 195
+weight = 50
+description = "エラーの理解やコードの学習"
+
+["レポート・実験"]
+glyph = "✎"
+hue = 330
+weight = 60
+description = "自分で考えて書くためのAIの使い方"
+
+["試験対策"]
+glyph = "✓"
+hue = 45
+weight = 70
+description = "計画づくりから復習まで"

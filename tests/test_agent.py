@@ -312,6 +312,59 @@ def test_revisions_that_shrink_a_section_are_discarded(tmp_path):
     assert "短い" not in text
 
 
+class CategoryLLM(MockLLM):
+    def __init__(self, category):
+        self.category = category
+        self.candidates = ""
+
+    def complete(self, system, user, *, json_mode=False, max_tokens=1500):
+        resp = super().complete(system, user, json_mode=json_mode, max_tokens=max_tokens)
+        if "TASK: outline_article" in system:
+            import json
+            self.candidates = user
+            plan = json.loads(resp.text)
+            return LLMResponse(json.dumps({**plan, "category": self.category}, ensure_ascii=False))
+        return resp
+
+
+def test_articles_get_a_category_from_the_site(tmp_path):
+    init_site(tmp_path / "site", "t", "d", "a", git=False)
+    llm = CategoryLLM("活用術")
+    agent = make_agent(tmp_path, llm=llm, scout=False)
+    agent.run_once()
+    assert "# カテゴリ候補\n- はじめての方へ\n- 活用術\n- ツール比較" in llm.candidates
+    text = Path(articles(agent)[0].payload["draft_path"]).read_text(encoding="utf-8")
+    assert 'categories: ["活用術"]\n' in text.split("---")[1]
+
+
+def test_unknown_category_falls_back_to_the_first(tmp_path):
+    init_site(tmp_path / "site", "t", "d", "a", git=False)
+    agent = make_agent(tmp_path, llm=CategoryLLM("存在しないカテゴリ"), scout=False)
+    agent.run_once()
+    text = Path(articles(agent)[0].payload["draft_path"]).read_text(encoding="utf-8")
+    assert 'categories: ["はじめての方へ"]' in text
+
+
+def test_articles_without_site_categories_have_none(tmp_path):
+    agent = make_agent(tmp_path, scout=False)
+    agent.run_once()
+    text = Path(articles(agent)[0].payload["draft_path"]).read_text(encoding="utf-8")
+    assert "categories:" not in text
+
+
+def test_repo_site_theme_matches_template():
+    root = Path(__file__).resolve().parent.parent
+    template = root / "income_agent" / "site_template"
+    for sub in ("layouts", "static"):
+        for src in (template / sub).rglob("*"):
+            if src.is_file():
+                assert src.read_bytes() == (root / "site" / src.relative_to(template)).read_bytes(), src
+    categories = (root / "site" / "data" / "categories.toml").read_text(encoding="utf-8")
+    for post in (root / "site" / "content" / "posts").glob("2*.md"):
+        match = re.search(r'^categories: \["(.+?)"\]', post.read_text(encoding="utf-8"), flags=re.M)
+        assert match and f'["{match.group(1)}"]' in categories, post
+
+
 # --- site & deploy -----------------------------------------------------------
 
 def test_init_site_creates_hugo_blog(tmp_path):

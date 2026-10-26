@@ -1,6 +1,12 @@
 {{ define "main" }}
-<h1 class="page-title">{{ .Title }}</h1>
+{{ $meta := dict }}
+{{ if eq .Data.Plural "categories" }}{{ $meta = index site.Data.categories .Title | default dict }}{{ end }}
+<header class="list-header" {{ with $meta.hue }}style="--h: {{ . }}"{{ end }}>
+  {{ with $meta.glyph }}<span class="list-glyph" aria-hidden="true">{{ . }}</span>{{ end }}
+  <h1 class="page-title">{{ .Title }}</h1>
+  {{ with $meta.description }}<p class="list-desc">{{ . }}</p>{{ end }}
+</header>
 {{ $paginator := .Paginate .Pages }}
-{{ partial "post-list.html" $paginator.Pages }}
+<div class="card-grid">{{ range $paginator.Pages }}{{ partial "card.html" . }}{{ end }}</div>
 {{ partial "pager.html" $paginator }}
 {{ end }}

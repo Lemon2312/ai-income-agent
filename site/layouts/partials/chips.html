@@ -1,0 +1,16 @@
+{{- /* Category links in data/categories.toml order, only for categories that already have posts. */ -}}
+{{- $links := slice -}}
+{{- range $c := partial "cats.html" . -}}
+  {{- range site.Taxonomies.categories -}}
+    {{- if eq .Page.Title $c.name -}}
+      {{- $links = $links | append (dict "c" $c "url" .Page.RelPermalink "count" .Count) -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- with $links }}
+<nav class="chips {{ $.class }}" aria-label="カテゴリ">
+  {{- range . }}
+  <a class="chip" href="{{ .url }}" style="--h: {{ .c.hue }}"><span class="chip-glyph" aria-hidden="true">{{ .c.glyph }}</span>{{ .c.name }}<span class="chip-count">{{ .count }}</span></a>
+  {{- end }}
+</nav>
+{{- end -}}
