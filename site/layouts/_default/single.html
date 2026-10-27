@@ -33,10 +33,10 @@
 
   {{ if and $isPost site.Params.mascotOutro }}
   <div class="post-outro reveal">
-    <aside class="poko-say">
-      {{ partial "mascot.html" (dict "mood" "happy" "class" "poko-say-mascot") }}
-      <div class="poko-say-bubble">
-        <span class="poko-say-name">{{ site.Params.mascotName | default "ポコ" }}</span>
+    <aside class="mascot-say">
+      {{ partial "mascot.html" (dict "mood" "happy" "class" "mascot-say-mascot") }}
+      <div class="mascot-say-bubble">
+        <span class="mascot-say-name">{{ site.Params.mascotName | default "タネリス" }}</span>
         <p>{{ site.Params.mascotOutro }}</p>
       </div>
     </aside>

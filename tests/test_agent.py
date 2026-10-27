@@ -383,11 +383,11 @@ def test_init_site_creates_hugo_blog(tmp_path):
     assert (site / ".gitignore").exists()
     assert "太郎" in (site / "content" / "privacy.md").read_text(encoding="utf-8")
     assert (site / "layouts" / "_default" / "_markup" / "render-link.html").exists()
-    for mascot_file in ("layouts/partials/mascot.html", "layouts/shortcodes/poko.html",
+    for mascot_file in ("layouts/partials/mascot.html", "layouts/shortcodes/tanerisu.html",
                         "layouts/404.html", "static/favicon.svg"):
         assert (site / mascot_file).exists(), mascot_file
     params = tomllib.loads((site / "hugo.toml").read_text(encoding="utf-8"))["params"]
-    assert params["mascotName"] == "ポコ" and params["mascotMessages"] and params["mascotOutro"]
+    assert params["mascotName"] == "タネリス" and params["mascotMessages"] and params["mascotOutro"]
     log = subprocess.run(["git", "-C", str(site), "log", "--oneline"], capture_output=True, text=True)
     assert "Initial blog" in log.stdout
     with pytest.raises(FileExistsError):

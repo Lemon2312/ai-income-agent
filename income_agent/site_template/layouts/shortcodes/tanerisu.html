@@ -1,0 +1,8 @@
+{{- /* Speech bubble from the mascot. Usage: {{< tanerisu mood="happy" >}}ひとこと{{< /tanerisu >}} */ -}}
+<aside class="mascot-say{{ if eq (.Get "side") "right" }} is-right{{ end }}">
+  {{ partial "mascot.html" (dict "mood" (.Get "mood") "class" "mascot-say-mascot") }}
+  <div class="mascot-say-bubble">
+    <span class="mascot-say-name">{{ site.Params.mascotName | default "タネリス" }}</span>
+    {{ .Inner | .Page.RenderString (dict "display" "block") }}
+  </div>
+</aside>
