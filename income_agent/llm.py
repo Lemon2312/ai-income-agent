@@ -116,6 +116,13 @@ class MockLLM:
                                           "readability": 4, "compliance": 4}, "issues": [],
                                "description": "[mock] フリーランスがAIで作業時間を減らす方法を解説します。"},
                               ensure_ascii=False)
+        elif name == "pick_paper":
+            text = json.dumps({"ids": re.findall(r"^ID: (\S+)", user, flags=re.M)[:1]})
+        elif name == "outline_paper":
+            category = re.search(r"# カテゴリ候補\n- (.+)", user)
+            text = json.dumps({"title": "[mock] 論文をやさしく解説", "intro": "[mock] 導入",
+                               "category": category.group(1) if category else "", "points": {}},
+                              ensure_ascii=False)
         elif name == "outline_article":
             category = re.search(r"# カテゴリ候補\n- (.+)", user)
             text = json.dumps({"intro": "[mock] 導入", "category": category.group(1) if category else "", "sections": [
