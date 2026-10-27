@@ -2,7 +2,7 @@
 <section class="hero">
   <canvas class="hero-canvas" aria-hidden="true"></canvas>
   <div class="hero-inner">
-    <p class="hero-kicker">Science × AI Study Lab</p>
+    {{ with site.Params.kicker }}<p class="hero-kicker">{{ . }}</p>{{ end }}
     <h1>{{ site.Title }}</h1>
     <p class="hero-lead">{{ site.Params.description }}</p>
     {{ $count := len (where site.RegularPages "Section" "posts") }}

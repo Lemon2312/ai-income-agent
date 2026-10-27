@@ -275,7 +275,7 @@ def test_repo_agent_config_has_study_guidelines():
     assert any("実在しない" in g for g in publisher["guidelines"])
     categories = tomllib.loads((Path(__file__).resolve().parent.parent / "site" / "data" / "categories.toml")
                                .read_text(encoding="utf-8"))
-    assert "研究" in categories
+    assert "量子コンピュータ" in categories
 
 
 class FixedScoresLLM(MockLLM):
