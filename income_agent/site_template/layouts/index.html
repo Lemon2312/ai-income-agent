@@ -14,7 +14,7 @@
       {{- range . }}<span class="hero-bubble-sizer" aria-hidden="true">{{ . }}</span>{{ end -}}
       <span class="hero-bubble-text" aria-live="polite">{{ index . 0 }}</span>
     </p>
-    <button class="hero-mascot-btn" type="button" aria-label="{{ site.Params.mascotName | default "ポコ" }}に話しかける">
+    <button class="hero-mascot-btn" type="button" aria-label="{{ site.Params.mascotName | default "タネリス" }}に話しかける">
       {{ partial "mascot.html" (dict "class" "hero-mascot-svg") }}
     </button>
   </div>

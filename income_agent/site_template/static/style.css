@@ -295,39 +295,29 @@ time { color: var(--muted); }
 .to-top.is-shown { opacity: 1; transform: none; pointer-events: auto; }
 html:not(.js) .to-top { display: none; }
 
-/* Mascot "Poko" */
+/* Mascot "Tanerisu" */
 .mascot { display: block; overflow: visible; }
-.mascot-shadow { fill: rgba(10, 20, 40, .18); transform-origin: 60px 134px; animation: poko-shadow 4s ease-in-out infinite; }
-.mascot-body { animation: poko-float 4s ease-in-out infinite; }
-.mascot-glass { fill: rgba(255, 255, 255, .92); }
-.mascot-line { fill: none; stroke: #1c2433; stroke-width: 3; stroke-linejoin: round; }
-.mascot-rim { fill: #fff; }
-.mascot-stroke { fill: none; stroke: #1c2433; stroke-width: 2.6; stroke-linecap: round; }
-.mascot-eye { fill: #1c2433; }
+.mascot-shadow { fill: rgba(10, 20, 40, .18); transform-origin: 60px 134px; animation: mascot-shadow 4s ease-in-out infinite; }
+.mascot-body { animation: mascot-float 4s ease-in-out infinite; }
+.mascot-tail { transform-origin: 80px 118px; animation: mascot-tail 3.6s ease-in-out infinite; }
+.mascot-stroke { fill: none; stroke: #2a1d14; stroke-width: 2.2; stroke-linecap: round; }
+.mascot-eye { fill: #2a1d14; }
 .mascot-glint { fill: #fff; }
-.mascot-cheek { fill: #fb7185; opacity: .45; }
-.mascot-shine { fill: none; stroke: #bae6fd; stroke-width: 4; stroke-linecap: round; opacity: .8; }
-.mascot-bubble { fill: rgba(255, 255, 255, .75); animation: poko-bubble 3.2s ease-in infinite; }
-.mascot-bubble.b2 { animation-delay: -1.1s; animation-duration: 2.6s; }
-.mascot-bubble.b3 { animation-delay: -2s; animation-duration: 3.8s; }
-.mascot-wave { animation: poko-wave 3s linear infinite; }
-.mascot-eyes { transform-box: fill-box; transform-origin: center; animation: poko-blink 5s infinite; }
-.mascot-tassel { transform-origin: 82px 11px; animation: poko-tassel 4s ease-in-out infinite; }
-.mascot-q { font: 800 26px Georgia, serif; fill: #f59e0b; animation: poko-q 1.6s ease-in-out infinite; transform-origin: 100px 36px; }
-@keyframes poko-float { 50% { transform: translateY(-6px); } }
-@keyframes poko-shadow { 50% { transform: scaleX(.82); opacity: .7; } }
-@keyframes poko-bubble { 0% { transform: translateY(0); opacity: 0; } 15% { opacity: 1; } 100% { transform: translateY(-34px); opacity: 0; } }
-@keyframes poko-wave { to { transform: translateX(40px); } }
-@keyframes poko-blink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(.1); } }
-@keyframes poko-tassel { 50% { transform: rotate(8deg); } }
-@keyframes poko-q { 50% { transform: rotate(12deg) translateY(-3px); } }
+.mascot-cheek { fill: #f2949a; opacity: .55; }
+.mascot-eyes { transform-box: fill-box; transform-origin: center; animation: mascot-blink 5s infinite; }
+.mascot-q { font: 800 26px Georgia, serif; fill: #f59e0b; animation: mascot-q 1.6s ease-in-out infinite; transform-origin: 84px 40px; }
+@keyframes mascot-float { 50% { transform: translateY(-6px); } }
+@keyframes mascot-shadow { 50% { transform: scaleX(.82); opacity: .7; } }
+@keyframes mascot-tail { 50% { transform: rotate(5deg); } }
+@keyframes mascot-blink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(.1); } }
+@keyframes mascot-q { 50% { transform: rotate(12deg) translateY(-3px); } }
 
 .hero { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
 .hero-mascot { position: relative; flex: none; display: flex; flex-direction: column; align-items: center; width: 210px; }
 .hero-mascot-btn { padding: 0; border: 0; background: none; cursor: pointer; width: 170px; -webkit-tap-highlight-color: transparent; }
 .hero-mascot-btn:focus-visible { outline: 2px solid #fff; outline-offset: 6px; border-radius: 16px; }
-.hero-mascot-btn.is-jumping .mascot { animation: poko-jump .6s cubic-bezier(.3, 1.6, .5, 1); }
-@keyframes poko-jump { 40% { transform: translateY(-18px) rotate(-6deg); } 70% { transform: translateY(0) scale(1.06, .94); } }
+.hero-mascot-btn.is-jumping .mascot { animation: mascot-jump .6s cubic-bezier(.3, 1.6, .5, 1); }
+@keyframes mascot-jump { 40% { transform: translateY(-18px) rotate(-6deg); } 70% { transform: translateY(0) scale(1.06, .94); } }
 .hero-bubble {
   position: relative; margin: 0 0 12px; padding: 10px 14px; border-radius: 16px; min-height: 3.2em;
   display: grid; place-items: center; text-align: center;
@@ -340,21 +330,21 @@ html:not(.js) .to-top { display: none; }
 .hero-bubble-sizer { visibility: hidden; }
 .hero-bubble.is-changing { opacity: 0; transform: translateY(4px); }
 
-.poko-say { display: flex; align-items: flex-end; gap: 14px; margin: 1.8em 0; }
-.poko-say.is-right { flex-direction: row-reverse; }
-.poko-say-mascot { flex: none; width: 76px; }
-.poko-say-bubble {
+.mascot-say { display: flex; align-items: flex-end; gap: 14px; margin: 1.8em 0; }
+.mascot-say.is-right { flex-direction: row-reverse; }
+.mascot-say-mascot { flex: none; width: 76px; }
+.mascot-say-bubble {
   position: relative; flex: 1; padding: 12px 18px; border-radius: 18px; font-size: .95rem; line-height: 1.8;
   background: var(--surface); border: 2px solid var(--border);
 }
-.poko-say-bubble::before {
+.mascot-say-bubble::before {
   content: ""; position: absolute; left: -9px; bottom: 22px; width: 14px; height: 14px;
   background: var(--surface); border-left: 2px solid var(--border); border-bottom: 2px solid var(--border); transform: rotate(45deg);
 }
-.poko-say.is-right .poko-say-bubble::before { left: auto; right: -9px; transform: rotate(-135deg); }
-.poko-say-bubble p { margin: 0; }
-.poko-say-bubble p + p { margin-top: .6em; }
-.poko-say-name { display: block; font-size: .72rem; font-weight: 800; letter-spacing: .08em; color: var(--accent); }
+.mascot-say.is-right .mascot-say-bubble::before { left: auto; right: -9px; transform: rotate(-135deg); }
+.mascot-say-bubble p { margin: 0; }
+.mascot-say-bubble p + p { margin-top: .6em; }
+.mascot-say-name { display: block; font-size: .72rem; font-weight: 800; letter-spacing: .08em; color: var(--accent); }
 .post-outro { max-width: 760px; margin: 48px auto 0; }
 
 .not-found { text-align: center; padding: 32px 0; }
@@ -372,7 +362,7 @@ html:not(.js) .to-top { display: none; }
   .hero-mascot-btn { width: 92px; }
   .hero-bubble { margin: 0; max-width: 190px; font-size: .78rem; }
   .hero-bubble::after { left: auto; right: -8px; bottom: 50%; transform: translateY(50%); border: 8px solid transparent; border-right: 0; border-left-color: #fff; }
-  .poko-say-mascot { width: 60px; }
+  .mascot-say-mascot { width: 60px; }
   body { font-size: 16px; }
   .hero { padding: 40px 22px; border-radius: 18px; }
   .featured-link { grid-template-columns: 1fr; }

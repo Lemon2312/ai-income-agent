@@ -1,59 +1,49 @@
-{{- /* Mascot "Poko", a round-bottom flask wearing a mortarboard.
-       Params: mood ("" | "happy" | "puzzled"), class. IDs are unique per call so several
-       copies can share a page. */ -}}
+{{- /* Mascot "Tanerisu", a squirrel holding a sprouting seed.
+       Params: mood ("" | "happy" | "puzzled"), class. */ -}}
 {{- $mood := .mood | default "" -}}
-{{- $id := printf "poko%d" (mod now.UnixNano 1000000007) -}}
-<svg class="mascot {{ with $mood }}mascot-{{ . }}{{ end }} {{ .class }}" viewBox="0 0 120 140" role="img" aria-label="マスコットのポコ">
-  <defs>
-    <clipPath id="{{ $id }}-glass"><path d="M48 22v26a42 42 0 1 0 24 0V22z"/></clipPath>
-    <linearGradient id="{{ $id }}-liquid" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#34d399"/>
-      <stop offset="1" stop-color="#8b5cf6"/>
-    </linearGradient>
-  </defs>
-  <ellipse class="mascot-shadow" cx="60" cy="134" rx="28" ry="4.5"/>
+<svg class="mascot {{ with $mood }}mascot-{{ . }}{{ end }} {{ .class }}" viewBox="0 0 120 140" role="img" aria-label="マスコットのタネリス">
+  <ellipse class="mascot-shadow" cx="60" cy="134" rx="30" ry="5"/>
   <g class="mascot-body">
-    <path class="mascot-glass" d="M48 22v26a42 42 0 1 0 24 0V22z"/>
-    <g clip-path="url(#{{ $id }}-glass)">
-      <g class="mascot-wave">
-        <path fill="url(#{{ $id }}-liquid)" d="M-60 100q10-6 20 0t20 0 20 0 20 0 20 0 20 0 20 0 20 0 20 0 20 0 20 0 20 0V140H-60z"/>
-      </g>
-      <circle class="mascot-bubble b1" cx="46" cy="122" r="3.2"/>
-      <circle class="mascot-bubble b2" cx="66" cy="126" r="2.2"/>
-      <circle class="mascot-bubble b3" cx="78" cy="120" r="2.6"/>
-      <path class="mascot-shine" d="M30 74a32 32 0 0 1 14-18"/>
+    <g class="mascot-tail">
+      <path d="M74 122C110 120 116 78 98 60 84 46 64 54 70 70 76 84 92 80 92 94 92 106 82 112 70 114z" fill="#d99a5c"/>
+      <path d="M80 112C96 104 102 86 94 72" fill="none" stroke="#f0c48f" stroke-width="5" stroke-linecap="round" opacity=".8"/>
     </g>
-    <path class="mascot-line" d="M48 22v26a42 42 0 1 0 24 0V22z"/>
-    <rect class="mascot-line mascot-rim" x="43" y="17" width="34" height="8" rx="4"/>
+    <ellipse cx="52" cy="108" rx="24" ry="22" fill="#c47a3e"/>
+    <ellipse cx="52" cy="113" rx="14" ry="14" fill="#f3d9b5"/>
+    <path d="M33 62l2-20 13 13zM56 54l11-14 2 19z" fill="#c47a3e"/>
+    <path d="M36 58l1-10 7 7zM59 54l6-7 1 10z" fill="#f2a7a2"/>
+    <circle cx="51" cy="74" r="21" fill="#c47a3e"/>
+    <ellipse cx="51" cy="82" rx="12" ry="8" fill="#f3d9b5"/>
 
     <g class="mascot-face">
       {{- if eq $mood "happy" }}
-      <path class="mascot-stroke" d="M41 80q6-7 12 0M67 80q6-7 12 0"/>
+      <path class="mascot-stroke" d="M39 73q4-5 8 0M55 73q4-5 8 0"/>
       {{- else }}
       <g class="mascot-eyes">
-        <ellipse class="mascot-eye" cx="47" cy="79" rx="5.2" ry="6.6"/>
-        <ellipse class="mascot-eye" cx="73" cy="79" rx="5.2" ry="6.6"/>
-        <circle class="mascot-glint" cx="49" cy="76.5" r="1.9"/>
-        <circle class="mascot-glint" cx="75" cy="76.5" r="1.9"/>
+        <circle class="mascot-eye" cx="43" cy="72" r="4"/>
+        <circle class="mascot-eye" cx="59" cy="72" r="4"/>
+        <circle class="mascot-glint" cx="44.3" cy="70.6" r="1.2"/>
+        <circle class="mascot-glint" cx="60.3" cy="70.6" r="1.2"/>
       </g>
       {{- end }}
-      <ellipse class="mascot-cheek" cx="37" cy="88" rx="5" ry="3"/>
-      <ellipse class="mascot-cheek" cx="83" cy="88" rx="5" ry="3"/>
+      <ellipse class="mascot-eye" cx="51" cy="79" rx="2.6" ry="2"/>
       {{- if eq $mood "puzzled" }}
-      <path class="mascot-stroke" d="M55 91q2.5-2 5 0t5 0"/>
+      <path class="mascot-stroke" d="M46 85q2.5-2 5 0t5 0"/>
       {{- else }}
-      <path class="mascot-stroke" d="M54 88q6 6 12 0"/>
+      <path class="mascot-stroke" d="M47 83q4 3 8 0"/>
       {{- end }}
+      <ellipse class="mascot-cheek" cx="36" cy="80" rx="6" ry="3.5"/>
+      <ellipse class="mascot-cheek" cx="66" cy="80" rx="6" ry="3.5"/>
     </g>
 
-    <g class="mascot-cap">
-      <rect x="49" y="9" width="22" height="9" rx="2" fill="#26314a"/>
-      <path d="M60 0l30 7-30 7-30-7z" fill="#323e5c" stroke="#1c2433" stroke-width="2" stroke-linejoin="round"/>
-      <path class="mascot-tassel" d="M60 7l22 4v12" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linecap="round"/>
-      <circle class="mascot-tassel" cx="82" cy="25" r="2.8" fill="#fbbf24"/>
+    <g transform="translate(52 111) scale(1.3) translate(-52 -110)">
+      <ellipse cx="52" cy="110" rx="9" ry="11" fill="#8a5a2b"/>
+      <path d="M52 99c0-3 0-4 0-6m0 3c-4-5-8-4-9-1 3 3 7 3 9 1zm0-1c3-5 8-5 9-2-2 3-6 4-9 2z" fill="#5fb36f" stroke="#3d8f55" stroke-width="1.6"/>
     </g>
+    <ellipse cx="38" cy="111" rx="5" ry="4.5" fill="#b06a33"/>
+    <ellipse cx="66" cy="111" rx="5" ry="4.5" fill="#b06a33"/>
     {{- if eq $mood "puzzled" }}
-    <text class="mascot-q" x="96" y="44">?</text>
+    <text class="mascot-q" x="78" y="50">?</text>
     {{- end }}
   </g>
 </svg>
