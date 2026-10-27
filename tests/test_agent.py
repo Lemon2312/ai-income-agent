@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from income_agent.agent import Agent
+from income_agent.arxiv import fetch_full_text, normalize_id, parse_papers
 from income_agent.cli import main
 from income_agent.config import load_config
 from income_agent.feeds import parse_feed
@@ -265,17 +266,19 @@ def test_guidelines_reach_every_stage(tmp_path):
     assert {"ideate_topics", "outline_article", "write_section", "review_article"} <= tasks
 
 
-def test_repo_agent_config_has_study_guidelines():
+def test_repo_agent_config_explains_quantum_papers():
     cfg = load_config(Path(__file__).resolve().parent.parent / "agent.toml")
     publisher = cfg.strategies["content_publisher"]
-    assert "理系大学生" in publisher["niche"]
-    assert any("不正行為" in g for g in publisher["guidelines"])
+    assert publisher["source"] == "arxiv"
+    assert "量子コンピュータ" in publisher["niche"]
+    assert "2408.13687" in publisher["papers"]
+    assert "quant-ph" in publisher["arxiv_query"]
     assert publisher["max_articles_per_day"] == 1
-    assert any("捏造" in g for g in publisher["guidelines"])
-    assert any("実在しない" in g for g in publisher["guidelines"])
+    assert any("書かれていない" in g for g in publisher["guidelines"])
+    assert any("誇張しない" in g for g in publisher["guidelines"])
     categories = tomllib.loads((Path(__file__).resolve().parent.parent / "site" / "data" / "categories.toml")
                                .read_text(encoding="utf-8"))
-    assert "研究" in categories
+    assert "量子コンピュータ" in categories
 
 
 class FixedScoresLLM(MockLLM):
@@ -506,3 +509,128 @@ def test_cli_init_and_init_site(tmp_path, capsys):
     assert main(["-c", str(dest), "init-site"]) == 0
     hugo = (tmp_path / "site" / "hugo.toml").read_text(encoding="utf-8")
     assert 'title = "フリーランスのAI時短ラボ"' in hugo
+
+
+# --- arXiv papers ------------------------------------------------------------
+
+def arxiv_entry(paper_id: str, title: str, abstract: str) -> str:
+    return f"""<entry><id>http://arxiv.org/abs/{paper_id}v2</id>
+<published>2024-08-24T17:00:00Z</published>
+<title>{title}
+  (long title)</title>
+<summary>  {abstract}
+</summary>
+<author><name>Alice Example</name></author><author><name>Bob Example</name></author>
+<link href="http://arxiv.org/abs/{paper_id}v2" rel="alternate" type="text/html"/>
+</entry>"""
+
+
+def arxiv_feed(*entries: str) -> bytes:
+    return ('<?xml version="1.0" encoding="UTF-8"?><feed xmlns="http://www.w3.org/2005/Atom">'
+            + "".join(entries) + "</feed>").encode()
+
+
+LISTED = arxiv_entry("2408.13687", "Quantum error correction below the surface code threshold",
+                     "We report logical error rates that fall as the code grows.")
+SEARCHED = [arxiv_entry("2501.00001", "A new qubit design", "We build a qubit that keeps its state longer."),
+            arxiv_entry("2501.00002", "Bounds on abstract codes", "We prove an inequality.")]
+ERROR_ENTRY = """<entry><id>http://arxiv.org/api/errors#incorrect_id_format_for_bad</id>
+<title>Error</title><summary>incorrect id format for bad</summary></entry>"""
+
+
+class ArxivFetch:
+    def __init__(self, html: bytes | None = b"<html><body><p>Introduction text.</p>"
+                                            b"<h2>References</h2><p>[1] Someone</p></body></html>"):
+        self.html = html
+        self.urls: list[str] = []
+
+    def __call__(self, url: str) -> bytes:
+        self.urls.append(url)
+        if "id_list=" in url:
+            return arxiv_feed(*([LISTED] if "2408.13687" in url else []), ERROR_ENTRY)
+        if "search_query=" in url:
+            return arxiv_feed(*SEARCHED)
+        if "/html/" in url:
+            if self.html is None:
+                raise OSError("no HTML version")
+            return self.html
+        return RSS
+
+
+def paper_agent(tmp_path: Path, llm=None, fetch=None, papers: str = '["2408.13687"]',
+                query: str = '"cat:quant-ph AND abs:qubit"') -> Agent:
+    cfg_path = make_config(tmp_path, scout=False)
+    text = cfg_path.read_text(encoding="utf-8").replace(
+        "[strategies.content_publisher]\n",
+        f'[strategies.content_publisher]\nsource = "arxiv"\npapers = {papers}\narxiv_query = {query}\n')
+    cfg_path.write_text(text, encoding="utf-8")
+    return Agent(load_config(cfg_path), llm=llm or MockLLM(), fetch=fetch or ArxivFetch())
+
+
+def test_parse_arxiv_papers_and_ids():
+    papers = parse_papers(arxiv_feed(LISTED, ERROR_ENTRY))
+    assert len(papers) == 1
+    paper = papers[0]
+    assert paper.id == "2408.13687" and paper.url == "https://arxiv.org/abs/2408.13687"
+    assert paper.title == "Quantum error correction below the surface code threshold (long title)"
+    assert paper.abstract.startswith("We report") and paper.published == "2024-08-24"
+    assert paper.authors == ["Alice Example", "Bob Example"]
+    for raw in ("2408.13687", "arXiv:2408.13687v3", "https://arxiv.org/abs/2408.13687v1",
+                "https://arxiv.org/pdf/2408.13687.pdf"):
+        assert normalize_id(raw) == "2408.13687", raw
+    assert normalize_id("quant-ph/9508027v2") == "quant-ph/9508027"
+
+
+def test_full_text_drops_references_and_keeps_both_ends():
+    paper = parse_papers(arxiv_feed(LISTED))[0]
+    assert fetch_full_text(ArxivFetch(), paper) == "Introduction text."
+    long_html = ("<p>" + "A" * 9000 + "</p><p>" + "Z" * 9000 + "</p>").encode()
+    text = fetch_full_text(ArxivFetch(long_html), paper, limit=3000)
+    assert text.startswith("A") and text.endswith("Z") and "中略" in text and len(text) < 3100
+    assert fetch_full_text(ArxivFetch(None), paper) == ""
+
+
+def test_listed_paper_becomes_an_article_with_its_source(tmp_path):
+    llm = RecordingLLM()
+    fetch = ArxivFetch()
+    agent = paper_agent(tmp_path, llm=llm, fetch=fetch)
+    agent.run_once()
+    article = articles(agent)[0]
+    assert article.title == "[mock] 論文をやさしく解説"
+    assert article.payload["arxiv_id"] == "2408.13687"
+    draft = Path(article.payload["draft_path"])
+    assert "arxiv-2408-13687" in draft.name
+    text = draft.read_text(encoding="utf-8")
+    headings = re.findall(r"^## (.+)$", text, flags=re.M)
+    assert headings == ["ひとことで言うと", "なぜこの研究が必要？", "何をしたの？", "何がすごいの？",
+                        "まだできないこと・課題", "用語ミニ辞典", "元の論文"]
+    assert "[arXiv:2408.13687](https://arxiv.org/abs/2408.13687)" in text
+    # Every writing and review prompt carries the abstract and the full-text excerpt.
+    for system, user in llm.calls:
+        if re.search(r"TASK: (outline_paper|write_section|review_article)", system):
+            assert "We report logical error rates" in user and "Introduction text." in user
+    assert not any("TASK: pick_paper" in s for s, u in llm.calls)
+
+    # The same paper is never written twice; the next run picks from the search instead.
+    agent.store.set_status(article.id, DONE)
+    agent.run_once()
+    assert any("search_query=" in u for u in fetch.urls)
+    assert [a.payload["arxiv_id"] for a in articles(agent)] == ["2501.00001"]
+
+
+def test_papers_are_picked_from_search_when_list_is_empty(tmp_path):
+    llm = RecordingLLM()
+    agent = paper_agent(tmp_path, llm=llm, papers="[]")
+    agent.run_once()
+    picks = [u for s, u in llm.calls if "TASK: pick_paper" in s]
+    assert len(picks) == 1 and "A new qubit design" in picks[0] and "Bounds on abstract codes" in picks[0]
+    assert articles(agent)[0].payload["arxiv_id"] == "2501.00001"
+
+
+def test_paper_is_retried_until_attempts_run_out(tmp_path):
+    agent = paper_agent(tmp_path, llm=FixedScoresLLM({"usefulness": 2, "accuracy": 2, "depth": 2,
+                                                      "readability": 2, "compliance": 4}), query='""')
+    for _ in range(3):
+        agent.run_once()
+    rejected = [a for a in agent.store.list_actions(REJECTED) if a.kind == "article_rejected"]
+    assert [a.payload["arxiv_id"] for a in rejected] == ["2408.13687", "2408.13687"]

@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from income_agent.arxiv import Paper, fetch_full_text, fetch_papers, normalize_id, search_papers
 from income_agent.deploy import DeployError, git_publish, github_pull_request
 from income_agent.llm import BudgetExceeded, LLMError
 from income_agent.storage import DONE, PENDING, REJECTED, Action, day_start_iso
@@ -66,6 +67,35 @@ REVISE_SECTION_SYSTEM = f"""TASK: revise_section
 
 SCORE_KEYS = ("usefulness", "accuracy", "depth", "readability", "compliance")
 
+PICK_PAPER_SYSTEM = """TASK: pick_paper
+あなたは、最先端の研究を一般の人にやさしく紹介するブログの編集者です。
+候補の論文から、専門知識のない読者向けの解説記事に向いているものを選び、向いている順に並べてください。
+- 何が新しくできるようになったのかを、一般の人にも説明できる成果を優先する
+- 実験での実証、新しいハードウェアや手法、実用に近づく成果など、話題性があるものを優先する
+- 純粋に数学的な理論や、前提知識が多すぎて説明しきれないものは選ばない
+- 向いていないものは入れなくてよい
+必ず次のJSONのみを返してください: {"ids": ["論文ID", ...]}"""
+
+PAPER_SECTIONS = ["ひとことで言うと", "なぜこの研究が必要？", "何をしたの？", "何がすごいの？",
+                  "まだできないこと・課題", "用語ミニ辞典"]
+
+PAPER_RULES = """- 論文の成果・数値・主張は、下の「論文の要旨」と「論文本文の抜粋」に書かれているものだけを使う。書かれていない結果や数値を作らない
+- 理解を助けるための一般的な補足やたとえ話は書いてよいが、論文の内容と区別できるように書く（「たとえるなら」「一般に」など）
+- 成果を誇張しない。論文自身が述べている限界や、まだできないことも書く
+- 専門用語には、出てきたその場でやさしい説明を添える
+- 論文の文章を長く引用・翻訳しない。自分の言葉で説明する"""
+
+PAPER_OUTLINE_SYSTEM = f"""TASK: outline_paper
+あなたは、研究論文を専門知識のない読者にやさしく解説するブログの編集者です。渡された論文の解説記事を企画してください。
+- title: 読者が「読んでみたい」と思える日本語の記事タイトル（論文の成果が伝わるもの。誇張しない）
+- intro: 記事の冒頭で読者の興味を引くために伝えること
+- points: 次の見出しごとに、書くべき具体的な内容を2〜4個。内容は論文に書かれていることにもとづく
+  見出し: {"、".join(PAPER_SECTIONS)}
+- 「カテゴリ候補」があれば、記事に最も合うものを1つ選び、候補の表記のまま category に入れる
+{PAPER_RULES}
+必ず次のJSONのみを返してください:
+{{"title": "記事タイトル", "intro": "導入で伝えること", "category": "カテゴリ名", "points": {{"見出し": ["書く内容", ...], ...}}}}"""
+
 
 def _slug(title: str) -> str:
     date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -112,7 +142,10 @@ def _pr_body(title: str, payload: dict[str, Any]) -> str:
         "内容を直したい場合は、「Files changed」タブから記事ファイルを編集してからマージできます。\n\n"
         f"- 品質スコア（AI編集長）: {history}\n"
         + (f"- 項目別（5点満点）: {scores}\n" if scores else "")
-        + f"- 文字数: {payload.get('chars', '-')}字\n\n"
+        + f"- 文字数: {payload.get('chars', '-')}字\n"
+        + (f"- 元の論文: {payload['paper_url']}（{payload.get('paper_title', '')}）\n"
+           "  公開前に、記事の内容が元の論文と合っているかを確かめてください。\n" if payload.get("paper_url") else "")
+        + "\n"
         f"編集長の最後の指摘:\n{issues}\n"
     )
 
@@ -120,6 +153,7 @@ def _pr_body(title: str, payload: dict[str, Any]) -> str:
 class ContentPublisher(Strategy):
     name = "content_publisher"
     description = "ジャンルに沿った記事を企画・執筆・品質チェックし、アフィリエイトリンク付きで公開する"
+    _source = ""  # the paper being explained, appended to every prompt while writing about it
 
     @property
     def drafts_dir(self) -> Path:
@@ -153,13 +187,17 @@ class ContentPublisher(Strategy):
             self.log.info("daily article limit reached; skipping")
             return []
         created: list[int] = []
-        for title in self._next_topics(count):
+        if self.cfg.get("source", "topics") == "arxiv":
+            jobs = [(None, paper) for paper in self._next_papers(count)]
+        else:
+            jobs = [(title, None) for title in self._next_topics(count)]
+        for title, paper in jobs:
             try:
-                action_id = self._produce(title)
+                action_id = self._produce(title, paper)
             except BudgetExceeded:
                 raise
             except LLMError as e:
-                self.log.warning("could not write %r: %s", title, e)
+                self.log.warning("could not write %r: %s", title or paper.id, e)
                 continue
             if action_id is not None:
                 created.append(action_id)
@@ -186,14 +224,99 @@ class ContentPublisher(Strategy):
         fresh = [t for t in ideas if t not in existing and t not in planned]
         return (planned + fresh)[:count]
 
+    def _paper_done(self, paper_id: str) -> bool:
+        if self.ctx.store.is_seen(self.name, f"arxiv:{paper_id}"):
+            return True
+        attempts = int(self.cfg.get("max_attempts_per_topic", 2))
+        rejected = self.ctx.store.list_actions(REJECTED, limit=1000)
+        return sum(1 for a in rejected if a.kind == "article_rejected"
+                   and a.payload.get("arxiv_id") == paper_id) >= attempts
+
+    def _next_papers(self, count: int) -> list[Paper]:
+        """Papers listed in `papers` come first, in order. When none are left,
+        the newest papers matching `arxiv_query` are offered to the LLM to pick from."""
+        wanted = [normalize_id(str(i)) for i in self.cfg.get("papers", [])]
+        todo = [i for i in dict.fromkeys(wanted) if not self._paper_done(i)]
+        # Fetch a few more than needed so a mistyped id can't block the ones after it.
+        papers = fetch_papers(self.ctx.fetch, todo[:count + 5])
+        missing = set(todo[:count + 5]) - {p.id for p in papers}
+        if missing:
+            self.log.warning("not found on arXiv: %s", ", ".join(sorted(missing)))
+        papers = papers[:count]
+        query = self.cfg.get("arxiv_query", "")
+        if len(papers) >= count or not query:
+            return papers[:count]
+
+        taken = {p.id for p in papers}
+        candidates = [p for p in search_papers(self.ctx.fetch, query, int(self.cfg.get("arxiv_candidates", 40)))
+                      if p.id not in taken and not self._paper_done(p.id)]
+        if not candidates:
+            return papers
+        listing = "\n\n".join(f"ID: {p.id}\nタイトル: {p.title}\n要旨: {p.abstract[:600]}" for p in candidates)
+        try:
+            result = self.ctx.llm.complete_json(
+                PICK_PAPER_SYSTEM,
+                f"ジャンル: {self.cfg.get('niche', '')}\n想定読者: {self.cfg.get('audience', '')}\n"
+                f"必要数: {count - len(papers)}\n\n# 候補\n{listing}",
+                strategy=self.name,
+            )
+        except LLMError as e:
+            self.log.warning("could not pick a paper: %s", e)
+            return papers
+        by_id = {p.id: p for p in candidates}
+        picked = [by_id[i] for i in dict.fromkeys(normalize_id(str(x)) for x in result.get("ids", [])) if i in by_id]
+        return (papers + picked)[:count]
+
+    def _paper_source(self, paper: Paper) -> str:
+        text = fetch_full_text(self.ctx.fetch, paper) if self.cfg.get("read_full_text", True) else ""
+        authors = ", ".join(paper.authors[:5]) + (" ほか" if len(paper.authors) > 5 else "")
+        return ("\n\n# 解説する論文\n"
+                f"論文タイトル: {paper.title}\n著者: {authors}\n公開日: {paper.published}\n"
+                f"URL: {paper.url}\n\n# 論文の要旨\n{paper.abstract}\n"
+                + (f"\n# 論文本文の抜粋\n{text}\n" if text else "")
+                + f"\n# 論文解説のルール（必ず守る）\n{PAPER_RULES}\n"
+                "\n# 採点するときの注意\n論文の要旨・本文の抜粋にない成果や数値が記事に書かれていたら、accuracy は1〜2点にする")
+
+    def _paper_outline(self, paper: Paper) -> tuple[str, list[dict[str, Any]], str | None]:
+        categories = self._categories()
+        brief = self._brief(paper.title)
+        if categories:
+            brief += "\n# カテゴリ候補\n" + "\n".join(f"- {c}" for c in categories)
+        plan = self.ctx.llm.complete_json(PAPER_OUTLINE_SYSTEM, brief, strategy=self.name)
+        title = str(plan.get("title", "")).strip() or paper.title
+        category = str(plan.get("category", "")).strip()
+        if categories and category not in categories:
+            category = str(self.cfg.get("default_category", categories[0]))
+        points = plan.get("points") if isinstance(plan.get("points"), dict) else {}
+        min_chars = int(self.cfg.get("min_chars", 2500))
+        per_section = max(400, int((min_chars - 300) / len(PAPER_SECTIONS) * 1.15))
+        parts: list[dict[str, Any]] = [
+            {"heading": None, "points": [str(plan.get("intro", "この研究のどこがおもしろいのか"))], "target": 250}
+        ]
+        for heading in PAPER_SECTIONS:
+            items = points.get(heading) or [f"論文の内容にもとづいて「{heading}」を説明する"]
+            parts.append({"heading": heading, "points": [str(x) for x in items], "target": per_section})
+        return title, parts, category or None
+
+    @staticmethod
+    def _paper_footer(paper: Paper) -> str:
+        authors = ", ".join(paper.authors[:3]) + (" ほか" if len(paper.authors) > 3 else "")
+        return ("## 元の論文\n\n"
+                f"- タイトル: {paper.title}\n"
+                + (f"- 著者: {authors}\n" if authors else "")
+                + (f"- 公開日: {paper.published}\n" if paper.published else "")
+                + f"- リンク: [arXiv:{paper.id}]({paper.url})\n\n"
+                "この記事は、論文の内容をかみくだいて解説したものです。正確な内容や詳しいデータは、元の論文をご確認ください。")
+
     def _guidelines(self) -> str:
         rules = [str(g) for g in self.cfg.get("guidelines", [])]
         return "\n# このブログの執筆ルール（必ず守る）\n" + "\n".join(f"- {r}" for r in rules) if rules else ""
 
     def _brief(self, title: str) -> str:
-        return (f"タイトル: {title}\nジャンル: {self.cfg.get('niche', '')}\n"
-                f"想定読者: {self.cfg.get('audience', '')}\n言語: {self.cfg.get('language', 'ja')}"
-                + self._guidelines())
+        brief = (f"タイトル: {title}\nジャンル: {self.cfg.get('niche', '')}\n"
+                 f"想定読者: {self.cfg.get('audience', '')}\n言語: {self.cfg.get('language', 'ja')}"
+                 + self._guidelines())
+        return brief + self._source if self._source else brief
 
     def _categories(self) -> list[str]:
         """Category names from the config, or else from the site's data/categories.toml
@@ -293,11 +416,23 @@ class ContentPublisher(Strategy):
                 "scores": scores if isinstance(scores, dict) else {},
                 "description": str(review.get("description", ""))}
 
-    def _produce(self, title: str) -> int | None:
+    def _produce(self, title: str | None, paper: Paper | None = None) -> int | None:
+        if paper is None:
+            return self._produce_article(str(title))
+        self._source = self._paper_source(paper)
+        try:
+            return self._produce_article(paper.title, paper)
+        finally:
+            self._source = ""
+
+    def _produce_article(self, title: str, paper: Paper | None = None) -> int | None:
         min_quality = float(self.cfg.get("min_quality", 0.8))
         max_revisions = int(self.cfg.get("max_revisions", 2))
 
-        parts, category = self._outline(title)
+        if paper:
+            title, parts, category = self._paper_outline(paper)
+        else:
+            parts, category = self._outline(title)
         self._write_parts(title, parts)
         body = self._assemble(title, parts)
         review = self._review(title, body)
@@ -310,10 +445,15 @@ class ContentPublisher(Strategy):
             review = self._review(title, body)
             history.append(review["score"])
 
-        path = self._save_draft(title, body, review["description"], category)
+        if paper:
+            body = body.rstrip() + "\n\n" + self._paper_footer(paper) + "\n"
+        slug = f"{datetime.now(timezone.utc):%Y-%m-%d}-arxiv-{re.sub(r'[^0-9a-z]+', '-', paper.id.lower())}" if paper else None
+        path = self._save_draft(title, body, review["description"], category, slug=slug)
         payload: dict[str, Any] = {"draft_path": str(path), "quality": review["score"],
                                    "quality_history": history, "scores": review["scores"],
                                    "issues": review["issues"], "chars": _body_chars(body)}
+        if paper:
+            payload.update(arxiv_id=paper.id, paper_url=paper.url, paper_title=paper.title)
 
         if review["score"] < min_quality:
             self.log.info("rejected %r (quality %.2f < %.2f)", title, review["score"], min_quality)
@@ -321,6 +461,8 @@ class ContentPublisher(Strategy):
             return None
 
         self.log.info("quality %.2f: %s", review["score"], title)
+        if paper:
+            self.ctx.store.mark_seen(self.name, f"arxiv:{paper.id}")
         if self.cfg.get("require_approval", True):
             return self.ctx.store.add_action(self.name, "article", title, payload)
 
@@ -328,7 +470,8 @@ class ContentPublisher(Strategy):
         self.log.info(self._publish(path, title, payload))
         return action_id
 
-    def _save_draft(self, title: str, body: str, description: str, category: str | None = None) -> Path:
+    def _save_draft(self, title: str, body: str, description: str, category: str | None = None,
+                    slug: str | None = None) -> Path:
         body = re.sub(r"\A# .*\n+", "", body.strip())
         body, link_count = insert_affiliate_links(body, self.cfg.get("affiliate_links", []))
         if link_count:
@@ -347,7 +490,7 @@ class ContentPublisher(Strategy):
             "---\n\n"
         )
         self.drafts_dir.mkdir(parents=True, exist_ok=True)
-        path = self.drafts_dir / f"{_slug(title)}.md"
+        path = self.drafts_dir / f"{slug or _slug(title)}.md"
         path.write_text(front_matter + body + "\n", encoding="utf-8")
         return path
 

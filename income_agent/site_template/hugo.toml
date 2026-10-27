@@ -8,6 +8,8 @@ summaryLength = 60
 [params]
 description = "{{DESCRIPTION}}"
 author = "{{AUTHOR}}"
+# トップの見出しの上に出る小さな英字。空なら非表示
+kicker = "Science × AI Study Lab"
 # 記事末尾に表示する案内（デジタル商品やツールへの導線）。空なら非表示。
 ctaTitle = ""
 ctaText = ""
