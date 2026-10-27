@@ -1,0 +1,72 @@
+name: Record revenue
+
+# Actions タブの「Record revenue」→「Run workflow」で、アフィリエイト報酬などの収益や費用を記録する。
+# 記録は .agent/agent.db に保存され、実行結果のページに収支レポートが表示される。
+# 金額がリポジトリに残るので、リポジトリを private にしてから使うこと。
+on:
+  workflow_dispatch:
+    inputs:
+      kind:
+        description: "種類"
+        type: choice
+        options: [revenue, cost, report]
+        default: revenue
+      amount:
+        description: "金額（円）。report のときは空欄"
+        type: string
+        default: ""
+      strategy:
+        description: "どの戦略の収支か"
+        type: choice
+        options: [content_publisher, freelance_scout, manual]
+        default: content_publisher
+      note:
+        description: "メモ（例: もしもアフィリエイト 10月分）"
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+
+# Blog agent と同じグループにして、agent.db への書き込みが重ならないようにする
+concurrency:
+  group: blog-agent
+  cancel-in-progress: false
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    env:
+      # 設定の読み込みに必要なだけで、AI は呼び出さない
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e .
+      - name: Record
+        if: ${{ inputs.kind != 'report' }}
+        env:
+          KIND: ${{ inputs.kind }}
+          AMOUNT: ${{ inputs.amount }}
+          STRATEGY: ${{ inputs.strategy }}
+          NOTE: ${{ inputs.note }}
+        run: income-agent -c agent.toml "$KIND" add "$AMOUNT" --strategy "$STRATEGY" --note "$NOTE"
+      - name: Report
+        run: |
+          {
+            echo '```'
+            income-agent -c agent.toml report
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Save agent state
+        if: ${{ inputs.kind != 'report' }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .agent
+          git commit -m "Record ${{ inputs.kind }}"
+          git push origin HEAD
