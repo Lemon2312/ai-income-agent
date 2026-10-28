@@ -5,11 +5,14 @@ import re
 import urllib.parse
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
+from datetime import date, datetime, timedelta, timezone
 
 from income_agent.feeds import Fetcher, strip_html
 
 API_URL = "https://export.arxiv.org/api/query"
 ATOM = "{http://www.w3.org/2005/Atom}"
+ARXIV = "{http://arxiv.org/schemas/atom}"
+ID_IN_TEXT = re.compile(r"arxiv\.org/(?:abs|pdf|html)/(\d{4}\.\d{4,5})")
 
 
 @dataclass
@@ -19,6 +22,8 @@ class Paper:
     abstract: str
     authors: list[str] = field(default_factory=list)
     published: str = ""  # YYYY-MM-DD
+    comment: str = ""  # authors' note, e.g. "Accepted in Nature"
+    journal_ref: str = ""
 
     @property
     def url(self) -> str:
@@ -38,8 +43,8 @@ def normalize_id(value: str) -> str:
     return re.sub(r"v\d+$", "", value)
 
 
-def _text(el: ET.Element, tag: str) -> str:
-    child = el.find(ATOM + tag)
+def _text(el: ET.Element, tag: str, ns: str = ATOM) -> str:
+    child = el.find(ns + tag)
     return " ".join((child.text or "").split()) if child is not None else ""
 
 
@@ -56,6 +61,8 @@ def parse_papers(data: bytes) -> list[Paper]:
             abstract=_text(entry, "summary"),
             authors=[_text(a, "name") for a in entry.findall(ATOM + "author")],
             published=_text(entry, "published")[:10],
+            comment=_text(entry, "comment", ARXIV),
+            journal_ref=_text(entry, "journal_ref", ARXIV),
         ))
     return papers
 
@@ -70,8 +77,12 @@ def fetch_papers(fetch: Fetcher, ids: list[str]) -> list[Paper]:
     return [found[i] for i in ids if i in found]
 
 
-def search_papers(fetch: Fetcher, query: str, max_results: int = 40) -> list[Paper]:
-    """Newest papers matching an arXiv search query, newest first."""
+def search_papers(fetch: Fetcher, query: str, max_results: int = 40, days: int = 0) -> list[Paper]:
+    """Newest papers matching an arXiv search query, newest first. With `days`,
+    only papers submitted within that many days."""
+    if days:
+        now = datetime.now(timezone.utc)
+        query = f"({query}) AND submittedDate:[{now - timedelta(days=days):%Y%m%d}0000 TO {now:%Y%m%d}2359]"
     params = urllib.parse.urlencode({"search_query": query, "sortBy": "submittedDate",
                                      "sortOrder": "descending", "max_results": max_results})
     return parse_papers(fetch(f"{API_URL}?{params}"))
@@ -93,3 +104,17 @@ def fetch_full_text(fetch: Fetcher, paper: Paper, limit: int = 12000) -> str:
         return text
     head = limit * 2 // 3
     return text[:head] + "\n…（中略）…\n" + text[-(limit - head):]
+
+
+def ids_in_text(data: bytes | str) -> list[str]:
+    """arXiv ids linked from a page or feed (e.g. a news article), in order of first mention."""
+    text = data.decode("utf-8", errors="replace") if isinstance(data, bytes) else data
+    return list(dict.fromkeys(ID_IN_TEXT.findall(text)))
+
+
+def days_old(paper: Paper, today: date | None = None) -> int:
+    try:
+        published = date.fromisoformat(paper.published)
+    except ValueError:
+        return 0
+    return ((today or datetime.now(timezone.utc).date()) - published).days

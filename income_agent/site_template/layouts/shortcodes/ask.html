@@ -1,0 +1,8 @@
+{{- /* A reader's question, usually answered by {{< tanerisu >}} right after. Usage: {{< ask >}}質問{{< /ask >}} */ -}}
+<aside class="mascot-say is-right ask-say">
+  <span class="ask-avatar" aria-hidden="true">?</span>
+  <div class="mascot-say-bubble">
+    <span class="mascot-say-name">読者の疑問</span>
+    {{ .Inner | .Page.RenderString (dict "display" "block") }}
+  </div>
+</aside>

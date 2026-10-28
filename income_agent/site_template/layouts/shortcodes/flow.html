@@ -1,0 +1,6 @@
+{{- /* Step-by-step diagram. Usage: {{< flow "手順1" "手順2" "手順3" >}} */ -}}
+<ol class="flow reveal">
+  {{- range $i, $step := .Params }}
+  <li class="flow-step" style="--i: {{ $i }}"><span class="flow-num">{{ add $i 1 }}</span><span class="flow-text">{{ $step | $.Page.RenderString }}</span></li>
+  {{- end }}
+</ol>
