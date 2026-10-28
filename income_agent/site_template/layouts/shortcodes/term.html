@@ -1,0 +1,5 @@
+{{- /* Glossary card. Usage: {{< term name="用語" >}}やさしい説明{{< /term >}} */ -}}
+<div class="term reveal">
+  <span class="term-name">{{ .Get "name" }}</span>
+  <div class="term-body">{{ .Inner | .Page.RenderString (dict "display" "block") }}</div>
+</div>

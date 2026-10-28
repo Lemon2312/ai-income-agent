@@ -1,0 +1,2 @@
+{{- /* One number card inside {{< stats >}}; the leading number counts up when it scrolls into view. */ -}}
+<div class="stat reveal"><span class="stat-value">{{ .Get "value" }}</span><span class="stat-label">{{ .Get "label" | .Page.RenderString }}</span></div>

@@ -9,7 +9,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from income_agent.arxiv import Paper, fetch_full_text, fetch_papers, normalize_id, search_papers
+from income_agent.arxiv import (Paper, days_old, fetch_full_text, fetch_papers, ids_in_text, normalize_id,
+                                 search_papers)
+from income_agent.feeds import parse_feed
 from income_agent.deploy import DeployError, git_publish, github_pull_request
 from income_agent.llm import BudgetExceeded, LLMError
 from income_agent.storage import DONE, PENDING, REJECTED, Action, day_start_iso
@@ -68,22 +70,144 @@ REVISE_SECTION_SYSTEM = f"""TASK: revise_section
 SCORE_KEYS = ("usefulness", "accuracy", "depth", "readability", "compliance")
 
 PICK_PAPER_SYSTEM = """TASK: pick_paper
-あなたは、最先端の研究を一般の人にやさしく紹介するブログの編集者です。
-候補の論文から、専門知識のない読者向けの解説記事に向いているものを選び、向いている順に並べてください。
-- 何が新しくできるようになったのかを、一般の人にも説明できる成果を優先する
-- 実験での実証、新しいハードウェアや手法、実用に近づく成果など、話題性があるものを優先する
-- 純粋に数学的な理論や、前提知識が多すぎて説明しきれないものは選ばない
+あなたは、最新の研究ニュースを一般の人にやさしく紹介するブログの編集者です。
+候補の論文（どれも最近公開されたもの）から、いま話題になりそうで、専門知識のない読者向けの解説記事に向いているものを選び、向いている順に並べてください。
+- 「話題のサイン」（ニュースで取り上げられた、有名な論文誌に掲載・採択、大規模な共同研究など）がある論文を優先する
+- 「最近のニュースの見出し」に関係する論文を優先する
+- 記録の更新、初めての実証、新しいハードウェアなど、何が新しくできるようになったのかを一般の人にも説明できる成果を優先する
+- 小さな改良にとどまるもの、純粋に数学的な理論、前提知識が多すぎて説明しきれないものは選ばない
 - 向いていないものは入れなくてよい
 必ず次のJSONのみを返してください: {"ids": ["論文ID", ...]}"""
+
+TOP_VENUES = re.compile(r"\b(Nature|Science|Physical Review Letters|PRL|PRX|Phys\. ?Rev\. ?Lett|Nature Physics|"
+                        r"Nature Communications|Science Advances|npj Quantum)\b", re.I)
+EXPERIMENTAL = re.compile(r"\b(experiment\w*|demonstrat\w*|realiz\w*|implement\w*|processor|hardware|device)\b", re.I)
 
 PAPER_SECTIONS = ["ひとことで言うと", "なぜこの研究が必要？", "何をしたの？", "何がすごいの？",
                   "まだできないこと・課題", "用語ミニ辞典"]
 
 PAPER_RULES = """- 論文の成果・数値・主張は、下の「論文の要旨」と「論文本文の抜粋」に書かれているものだけを使う。書かれていない結果や数値を作らない
+- 数値を書くときは、何の数値か（どの条件・どの装置・どの単位か）を論文どおり正確に書く。別の条件の数値と取り違えない
 - 理解を助けるための一般的な補足やたとえ話は書いてよいが、論文の内容と区別できるように書く（「たとえるなら」「一般に」など）
 - 成果を誇張しない。論文自身が述べている限界や、まだできないことも書く
 - 専門用語には、出てきたその場でやさしい説明を添える
+- 1段落は2〜3文まで。長い説明を続けず、図・表・箇条書き・会話の部品で見せる
+- 前のパートで説明したこと（量子ビットとは何か、など）を繰り返さない
 - 論文の文章を長く引用・翻訳しない。自分の言葉で説明する"""
+
+# How each part is shown. The {{< >}} parts are Hugo shortcodes in the site's layouts/shortcodes.
+PAPER_STYLES: dict[str | None, str] = {
+    None: "1〜2段落で読者の興味を引く。最後に、タネリス（このブログのマスコット）がこの記事で分かることを一言で紹介する:\n"
+          "{{< tanerisu >}}ひとこと{{< /tanerisu >}}",
+    "ひとことで言うと": "次の形の要約ボックスだけを書く（ボックスの外に文章は書かない）:\n"
+                       "{{< summary >}}\nこの研究の成果を1〜2文で（数値があれば入れる）\n\n- ポイント1\n- ポイント2\n- ポイント3\n{{< /summary >}}",
+    "なぜこの研究が必要？": "身近なたとえ話を1つ使う。途中に、読者が抱きそうな疑問を1つ書き、すぐあとでタネリスが答える:\n"
+                         "{{< ask >}}読者の疑問{{< /ask >}}\n{{< tanerisu >}}答え{{< /tanerisu >}}",
+    "何をしたの？": "研究でしたことを3〜5ステップの図にする（各ステップは20字以内）:\n"
+                  '{{< flow "ステップ1" "ステップ2" "ステップ3" >}}\n'
+                  "図のあとに、各ステップを1〜2文ずつ説明する。これまでの方法と比べられるなら、Markdownの表（項目／これまで／今回）を使ってよい",
+    "何がすごいの？": "論文の要旨・本文の抜粋にそのまま書かれている数値を2〜4個選び、数字カードにする:\n"
+                    '{{< stats >}}\n{{< stat value="2.4倍" label="何の数値か（条件も正確に）" >}}\n{{< /stats >}}\n'
+                    "value は数値から始める（例: 2.4倍、0.143%、101個）。論文にない数値や、自分で計算した数値は使わない。"
+                    "使える数値がなければ数字カードは使わず、これまでとの違いを表で示す。カードのあとで、それぞれの数値の意味を説明する",
+    "まだできないこと・課題": "課題を箇条書き（2〜4個）で示し、それぞれ1〜2文で説明する。最後に、タネリスが今後に期待することを一言:\n"
+                          '{{< tanerisu mood="puzzled" >}}ひとこと{{< /tanerisu >}}',
+    "用語ミニ辞典": "この記事に出てきた専門用語を3〜5個、次の形だけで書く（ほかの文章は書かない）:\n"
+                  '{{< term name="用語" >}}中学生にもわかる1〜2文の説明{{< /term >}}',
+}
+
+# Shortcodes the site provides, and whether they wrap content. Anything else the LLM writes
+# (or a broken one) is removed, because an unknown or unclosed shortcode fails the whole Hugo build.
+SHORTCODES = {"summary": True, "stats": True, "ask": True, "tanerisu": True, "term": True,
+              "stat": False, "flow": False}
+_SHORTCODE = re.compile(r"\{\{[<%](.*?)[>%]\}\}")
+_NAMED = re.compile(r'(\w+)="([^"]*)"')
+
+
+def _shortcode_params(name: str, args: str) -> str | None:
+    """Canonical parameter text for a shortcode, or None when it can't be rendered."""
+    args = re.sub(r"[“”„＂]", '"', args).strip().rstrip("/").strip()
+    if name == "flow":
+        steps = re.findall(r'"([^"]*)"', args)
+        if len(steps) < 2 or re.sub(r'\s*"[^"]*"\s*', "", args):
+            return None
+        return " ".join(f'"{s.strip()}"' for s in steps)
+    if re.sub(_NAMED, "", args).strip():
+        return None
+    named = dict(_NAMED.findall(args))
+    required = {"stat": ("value", "label"), "term": ("name",)}.get(name, ())
+    if any(not named.get(k, "").strip() for k in required):
+        return None
+    allowed = {"stat": ("value", "label"), "term": ("name",), "tanerisu": ("mood", "side")}.get(name, ())
+    if name == "tanerisu" and named.get("mood") not in (None, "", "happy", "puzzled"):
+        named.pop("mood")
+    return " ".join(f'{k}="{named[k].strip()}"' for k in allowed if named.get(k, "").strip())
+
+
+def clean_shortcodes(markdown: str) -> str:
+    """Keeps only well-formed uses of the site's shortcodes. Unknown, malformed or
+    unbalanced tags are dropped and the text inside them is kept."""
+    tokens = []  # (start, end, replacement or None, name, kind)
+    for m in _SHORTCODE.finditer(markdown):
+        inner = re.match(r"\s*(/?)\s*([\w-]+)(.*)$", m.group(1), flags=re.S)
+        if not inner or inner.group(2) not in SHORTCODES:
+            tokens.append([m.start(), m.end(), None, "", "bad"])
+            continue
+        closing, name, args = inner.groups()
+        if closing:
+            tokens.append([m.start(), m.end(), f"{{{{< /{name} >}}}}", name, "close"])
+            continue
+        params = _shortcode_params(name, args)
+        text = None if params is None else f"{{{{< {name}{' ' + params if params else ''} >}}}}"
+        tokens.append([m.start(), m.end(), text, name, "open" if SHORTCODES[name] else "single"])
+    stack: list[list] = []
+    for tok in tokens:
+        if tok[4] == "open":
+            stack.append(tok)
+        elif tok[4] == "close":
+            if any(t[3] == tok[3] for t in stack):
+                while stack[-1][3] != tok[3]:
+                    stack.pop()[2] = None
+                opener = stack.pop()
+                if opener[2] is None:
+                    tok[2] = None
+            else:
+                tok[2] = None
+    for tok in stack:
+        tok[2] = None
+    out, pos = [], 0
+    for start, end, text, *_ in tokens:
+        out.append(markdown[pos:start])
+        out.append(text or "")
+        pos = end
+    out.append(markdown[pos:])
+    return "".join(out)
+
+PAPER_SECTION_SYSTEM = """TASK: write_section
+あなたは、研究論文を専門知識のない読者にやさしく、楽しく解説するライターです。記事のうち、指定された1つのパートだけをMarkdownで書いてください。
+- 見出し（## ）は書かず、本文だけを出力する
+- 「表現のしかた」に書かれた {{< >}} の部品（要約ボックス・図・数字カード・会話・用語カード）を、書かれた形のとおりに使う。部品の名前や書き方を変えない
+- 文章は短い段落で、話しかけるように書く。読者がワクワクするように、何が新しいのかをはっきり伝える"""
+
+PAPER_REVISE_SYSTEM = """TASK: revise_section
+あなたは編集長の指摘を反映して記事を改善するライターです。指定された1つのパートを書き直してください。
+- このパートに関係する指摘をすべて解消する。関係ない指摘は無視してよい
+- 見出し（## ）は書かず、本文だけを出力する
+- 「表現のしかた」に書かれた {{< >}} の部品は、書かれた形のとおりに残す"""
+
+PAPER_REVIEW_SYSTEM = """TASK: review_article
+あなたは、研究をやさしく紹介するメディアの編集長です。論文解説の記事を次の5項目でそれぞれ1〜5点で採点してください（4点=そのまま公開できる水準）。
+- usefulness: 専門知識のない読者が、この研究で何がわかったのか・何がすごいのかを理解できるか
+- accuracy: 記事の成果・数値が、論文の要旨・本文の抜粋と合っているか。論文にない数値や、条件の取り違えがあれば1〜2点
+- depth: 一般論の繰り返しではなく、この論文ならではの内容が書かれているか
+- readability: 短い段落・図・数字カード・会話などで読みやすく、同じ説明の繰り返しがないか
+- compliance: 誇張・断定や「執筆ルール」への違反がないか（あれば1点）
+注意:
+- 記事の中の {{< … >}} は、要約ボックス・図・数字カード・会話・用語カードを表示する部品なので、中の文章を本文として評価する
+- issues には、どの見出しをどう直すべきかを具体的に書く（4点以上の項目については書かなくてよい）
+必ず次のJSONのみを返してください:
+{"scores": {"usefulness": 1-5, "accuracy": 1-5, "depth": 1-5, "readability": 1-5, "compliance": 1-5},
+ "issues": ["「見出し名」: 改善点", ...], "description": "検索結果に表示する説明文（全角120字以内）"}"""
 
 PAPER_OUTLINE_SYSTEM = f"""TASK: outline_paper
 あなたは、研究論文を専門知識のない読者にやさしく解説するブログの編集者です。渡された論文の解説記事を企画してください。
@@ -233,8 +357,8 @@ class ContentPublisher(Strategy):
                    and a.payload.get("arxiv_id") == paper_id) >= attempts
 
     def _next_papers(self, count: int) -> list[Paper]:
-        """Papers listed in `papers` come first, in order. When none are left,
-        the newest papers matching `arxiv_query` are offered to the LLM to pick from."""
+        """Papers listed in `papers` come first, in order. When none are left, recent
+        papers matching `arxiv_query` are ranked by signs of attention and the LLM picks."""
         wanted = [normalize_id(str(i)) for i in self.cfg.get("papers", [])]
         todo = [i for i in dict.fromkeys(wanted) if not self._paper_done(i)]
         # Fetch a few more than needed so a mistyped id can't block the ones after it.
@@ -246,26 +370,81 @@ class ContentPublisher(Strategy):
         query = self.cfg.get("arxiv_query", "")
         if len(papers) >= count or not query:
             return papers[:count]
+        needed = count - len(papers)
 
+        headlines, news_ids = self._news()
         taken = {p.id for p in papers}
-        candidates = [p for p in search_papers(self.ctx.fetch, query, int(self.cfg.get("arxiv_candidates", 40)))
-                      if p.id not in taken and not self._paper_done(p.id)]
+        found = search_papers(self.ctx.fetch, query, int(self.cfg.get("arxiv_candidates", 60)),
+                              days=int(self.cfg.get("recent_days", 14)))
+        # Papers that news articles link to are worth a look even if the search missed them.
+        extra = [i for i in news_ids if i not in {p.id for p in found}][:10]
+        if extra:
+            max_age = int(self.cfg.get("news_max_days", 90))
+            found += [p for p in fetch_papers(self.ctx.fetch, extra) if days_old(p) <= max_age]
+        candidates = [p for p in found if p.id not in taken and not self._paper_done(p.id)]
         if not candidates:
             return papers
-        listing = "\n\n".join(f"ID: {p.id}\nタイトル: {p.title}\n要旨: {p.abstract[:600]}" for p in candidates)
+        ranked = sorted(candidates, key=lambda p: (self._hot_signals(p, news_ids)[0], p.published), reverse=True)
+        ranked = ranked[:int(self.cfg.get("pick_from", 15))]
+
+        def describe(p: Paper) -> str:
+            signals = self._hot_signals(p, news_ids)[1]
+            return (f"ID: {p.id}\n公開日: {p.published}\nタイトル: {p.title}\n"
+                    + (f"話題のサイン: {'、'.join(signals)}\n" if signals else "")
+                    + f"要旨: {p.abstract[:600]}")
+
+        news = "\n".join(f"- {h}" for h in headlines[:15])
         try:
             result = self.ctx.llm.complete_json(
                 PICK_PAPER_SYSTEM,
                 f"ジャンル: {self.cfg.get('niche', '')}\n想定読者: {self.cfg.get('audience', '')}\n"
-                f"必要数: {count - len(papers)}\n\n# 候補\n{listing}",
+                f"必要数: {needed}\n"
+                + (f"\n# 最近のニュースの見出し（参考）\n{news}\n" if news else "")
+                + "\n# 候補\n" + "\n\n".join(describe(p) for p in ranked),
                 strategy=self.name,
             )
+            by_id = {p.id: p for p in ranked}
+            picked = [by_id[i] for i in dict.fromkeys(normalize_id(str(x)) for x in result.get("ids", []))
+                      if i in by_id]
         except LLMError as e:
             self.log.warning("could not pick a paper: %s", e)
-            return papers
-        by_id = {p.id: p for p in candidates}
-        picked = [by_id[i] for i in dict.fromkeys(normalize_id(str(x)) for x in result.get("ids", [])) if i in by_id]
-        return (papers + picked)[:count]
+            picked = []
+        # If the LLM picks nothing usable, fall back to the paper with the most signs of attention.
+        return (papers + (picked or ranked[:needed]))[:count]
+
+    def _news(self) -> tuple[list[str], list[str]]:
+        """Headlines and linked arXiv ids from the `news_feeds` RSS feeds."""
+        headlines: list[str] = []
+        ids: list[str] = []
+        for url in self.cfg.get("news_feeds", []):
+            try:
+                data = self.ctx.fetch(url)
+                headlines += [item.title for item in parse_feed(data) if item.title]
+                ids += ids_in_text(data)
+            except Exception as e:  # noqa: BLE001 - news only helps the ranking
+                self.log.warning("could not read news feed %s: %s", url, e)
+        return headlines, list(dict.fromkeys(ids))
+
+    @staticmethod
+    def _hot_signals(paper: Paper, news_ids: list[str]) -> tuple[int, list[str]]:
+        """A rough attention score with the reasons, shown to the LLM that picks."""
+        score, reasons = 0, []
+        if paper.id in news_ids:
+            score += 6
+            reasons.append("ニュース記事で紹介されている")
+        venue = TOP_VENUES.search(f"{paper.journal_ref} {paper.comment}")
+        if venue:
+            score += 3
+            reasons.append(f"論文誌の情報: {(paper.journal_ref or paper.comment)[:80]}")
+        if len(paper.authors) >= 20:
+            score += 2
+            reasons.append(f"大規模な共同研究（著者{len(paper.authors)}人）")
+        elif len(paper.authors) >= 8:
+            score += 1
+        if EXPERIMENTAL.search(paper.abstract):
+            score += 1
+            reasons.append("実験・実証の成果")
+        return score, reasons
 
     def _paper_source(self, paper: Paper) -> str:
         text = fetch_full_text(self.ctx.fetch, paper) if self.cfg.get("read_full_text", True) else ""
@@ -289,13 +468,15 @@ class ContentPublisher(Strategy):
             category = str(self.cfg.get("default_category", categories[0]))
         points = plan.get("points") if isinstance(plan.get("points"), dict) else {}
         min_chars = int(self.cfg.get("min_chars", 2500))
-        per_section = max(400, int((min_chars - 300) / len(PAPER_SECTIONS) * 1.15))
+        per_section = max(300, int((min_chars - 200) / len(PAPER_SECTIONS) * 1.15))
         parts: list[dict[str, Any]] = [
-            {"heading": None, "points": [str(plan.get("intro", "この研究のどこがおもしろいのか"))], "target": 250}
+            {"heading": None, "points": [str(plan.get("intro", "この研究のどこがおもしろいのか"))], "target": 200,
+             "style": PAPER_STYLES[None]}
         ]
         for heading in PAPER_SECTIONS:
             items = points.get(heading) or [f"論文の内容にもとづいて「{heading}」を説明する"]
-            parts.append({"heading": heading, "points": [str(x) for x in items], "target": per_section})
+            parts.append({"heading": heading, "points": [str(x) for x in items], "target": per_section,
+                          "style": PAPER_STYLES[heading]})
         return title, parts, category or None
 
     @staticmethod
@@ -360,14 +541,23 @@ class ContentPublisher(Strategy):
         toc = "\n".join(f"- {p['heading']}" for p in parts if p["heading"])
         name = part["heading"] or "導入（最初の見出しの前に置く文章）"
         points = "\n".join(f"- {x}" for x in part["points"])
+        earlier = []
+        for p in parts:
+            if p["heading"] == part["heading"]:
+                break
+            if p.get("body"):
+                earlier.append(f"## {p['heading'] or '導入'}\n{p['body'][:400]}")
         return (f"{self._brief(title)}\n\n# 記事の見出し構成\n{toc}\n\n"
-                f"# 今回書くパート\n{name}\n\n# このパートで書く内容\n{points}\n\n"
-                f"# 文字数\n{part['target']}字以上")
+                + ("# ここまでに書いた内容（同じ説明を繰り返さない）\n" + "\n\n".join(earlier) + "\n\n" if earlier else "")
+                + f"# 今回書くパート\n{name}\n\n# このパートで書く内容\n{points}\n\n"
+                + (f"# 表現のしかた（必ず守る）\n{part['style']}\n\n" if part.get("style") else "")
+                + f"# 文字数\n{part['target']}字以上")
 
     def _write_parts(self, title: str, parts: list[dict[str, Any]]) -> None:
         for part in parts:
             part["body"] = self.ctx.llm.complete(
-                SECTION_SYSTEM, self._part_prompt(title, parts, part), strategy=self.name,
+                PAPER_SECTION_SYSTEM if self._source else SECTION_SYSTEM,
+                self._part_prompt(title, parts, part), strategy=self.name,
                 max_tokens=min(4000, part["target"] * 2 + 500),
             ).text.strip()
 
@@ -379,7 +569,7 @@ class ContentPublisher(Strategy):
             current = _body_chars(part["body"])
             target = max(part["target"], current)
             revised = self.ctx.llm.complete(
-                REVISE_SECTION_SYSTEM,
+                PAPER_REVISE_SYSTEM if self._source else REVISE_SECTION_SYSTEM,
                 f"{self._part_prompt(title, parts, {**part, 'target': target})}\n\n"
                 f"# 編集長の指摘（記事全体）\n{notes}\n\n# 現在の本文\n{part['body']}",
                 strategy=self.name, max_tokens=min(4000, target * 2 + 500),
@@ -391,7 +581,7 @@ class ContentPublisher(Strategy):
     def _assemble(title: str, parts: list[dict[str, Any]]) -> str:
         out = [f"# {title}"]
         for part in parts:
-            body = re.sub(r"\A##\s+.*\n+", "", part["body"].strip())
+            body = clean_shortcodes(re.sub(r"\A##\s+.*\n+", "", part["body"].strip()))
             out.append(body if part["heading"] is None else f"## {part['heading']}\n\n{body}")
         return "\n\n".join(out) + "\n"
 
@@ -399,7 +589,7 @@ class ContentPublisher(Strategy):
         min_chars = int(self.cfg.get("min_chars", 2500))
         chars = _body_chars(body)
         review = self.ctx.llm.complete_json(
-            REVIEW_SYSTEM, f"{self._brief(title)}\n文字数: {chars}字\n\n# 記事\n{body}",
+            PAPER_REVIEW_SYSTEM if self._source else REVIEW_SYSTEM, f"{self._brief(title)}\n文字数: {chars}字\n\n# 記事\n{body}",
             strategy=self.name,
         )
         scores = review.get("scores")

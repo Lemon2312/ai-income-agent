@@ -1,0 +1,5 @@
+{{- /* Key-point box at the top of an article. Usage: {{< summary >}}一文の要約と箇条書き{{< /summary >}} */ -}}
+<div class="paper-summary reveal">
+  <span class="paper-summary-label">30秒でわかる</span>
+  {{ .Inner | .Page.RenderString (dict "display" "block") }}
+</div>

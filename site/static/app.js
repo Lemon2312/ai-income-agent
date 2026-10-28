@@ -70,6 +70,34 @@
     reveals.forEach(function (el) { el.classList.add("is-visible"); });
   }
 
+  // Number cards count up to their value when they scroll into view ("2.4倍" → 0.0 … 2.4).
+  var stats = document.querySelectorAll(".stat-value");
+  if (stats.length && "IntersectionObserver" in window && !reduceMotion) {
+    var countIo = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        countIo.unobserve(e.target);
+        countUp(e.target);
+      });
+    }, { rootMargin: "0px 0px -10% 0px" });
+    stats.forEach(function (el) { if (/^\D*\d+(\.\d+)?\D*$/.test(el.textContent.trim())) countIo.observe(el); });
+  }
+
+  function countUp(el) {
+    var text = el.textContent.trim();
+    var m = text.match(/\d+(\.\d+)?/);
+    var target = parseFloat(m[0]), decimals = m[1] ? m[1].length - 1 : 0;
+    var before = text.slice(0, m.index), after = text.slice(m.index + m[0].length);
+    var start = performance.now(), duration = 1100;
+    function frame(now) {
+      var t = Math.min(1, (now - start) / duration);
+      var eased = 1 - Math.pow(1 - t, 3);
+      el.textContent = before + (target * eased).toFixed(decimals) + after;
+      if (t < 1) requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  }
+
   var tocLinks = document.querySelectorAll(".toc a");
   if (tocLinks.length && "IntersectionObserver" in window) {
     var byId = {};

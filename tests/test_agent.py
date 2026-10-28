@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import re
+import urllib.parse
+from datetime import date, timedelta
 import subprocess
 import tomllib
 from importlib import resources
@@ -9,14 +11,14 @@ from pathlib import Path
 import pytest
 
 from income_agent.agent import Agent
-from income_agent.arxiv import fetch_full_text, normalize_id, parse_papers
+from income_agent.arxiv import fetch_full_text, ids_in_text, normalize_id, parse_papers
 from income_agent.cli import main
 from income_agent.config import load_config
 from income_agent.feeds import parse_feed
 from income_agent.llm import LLMResponse, MockLLM, parse_json
 from income_agent.site import init_site
 from income_agent.storage import DONE, PENDING, REJECTED
-from income_agent.strategies.content_publisher import insert_affiliate_links
+from income_agent.strategies.content_publisher import clean_shortcodes, insert_affiliate_links
 from income_agent.strategies.freelance_scout import _contains
 
 RSS = b"""<?xml version="1.0"?>
@@ -271,8 +273,8 @@ def test_repo_agent_config_explains_quantum_papers():
     publisher = cfg.strategies["content_publisher"]
     assert publisher["source"] == "arxiv"
     assert "量子コンピュータ" in publisher["niche"]
-    assert "2408.13687" in publisher["papers"]
     assert "quant-ph" in publisher["arxiv_query"]
+    assert publisher["recent_days"] <= 30 and publisher["news_feeds"]
     assert publisher["max_articles_per_day"] == 1
     assert any("書かれていない" in g for g in publisher["guidelines"])
     assert any("誇張しない" in g for g in publisher["guidelines"])
@@ -513,9 +515,11 @@ def test_cli_init_and_init_site(tmp_path, capsys):
 
 # --- arXiv papers ------------------------------------------------------------
 
-def arxiv_entry(paper_id: str, title: str, abstract: str) -> str:
+def arxiv_entry(paper_id: str, title: str, abstract: str, extra: str = "", authors: int = 2,
+                published: str = "2024-08-24") -> str:
+    names = "".join(f"<author><name>Author {i}</name></author>" for i in range(authors - 2))
     return f"""<entry><id>http://arxiv.org/abs/{paper_id}v2</id>
-<published>2024-08-24T17:00:00Z</published>
+<published>{published}T17:00:00Z</published>{extra}{names}
 <title>{title}
   (long title)</title>
 <summary>  {abstract}
@@ -526,7 +530,8 @@ def arxiv_entry(paper_id: str, title: str, abstract: str) -> str:
 
 
 def arxiv_feed(*entries: str) -> bytes:
-    return ('<?xml version="1.0" encoding="UTF-8"?><feed xmlns="http://www.w3.org/2005/Atom">'
+    return ('<?xml version="1.0" encoding="UTF-8"?><feed xmlns="http://www.w3.org/2005/Atom" '
+            'xmlns:arxiv="http://arxiv.org/schemas/atom">'
             + "".join(entries) + "</feed>").encode()
 
 
@@ -634,3 +639,106 @@ def test_paper_is_retried_until_attempts_run_out(tmp_path):
         agent.run_once()
     rejected = [a for a in agent.store.list_actions(REJECTED) if a.kind == "article_rejected"]
     assert [a.payload["arxiv_id"] for a in rejected] == ["2408.13687", "2408.13687"]
+
+
+# --- visual components & hot papers ----------------------------------------
+
+def test_clean_shortcodes_keeps_valid_parts_and_drops_broken_ones():
+    text = (
+        "{{< summary >}}要約\n- 点{{< /summary >}}\n"
+        '{{< stats >}}{{< stat value="2.4倍" label="寿命" >}}{{< stat value="5" >}}{{< /stats >}}\n'
+        "{{< flow “測る” “直す” >}}\n"
+        '{{< flow "1つだけ" >}}\n'
+        "{{< ask >}}閉じ忘れ\n"
+        '{{< tanerisu mood="angry" >}}こんにちは{{< /tanerisu >}}\n'
+        '{{< term name="量子ビット" >}}説明{{< /term >}}{{< /term >}}\n'
+        "{{< youtube abc >}}{{% notice %}}注意{{% /notice %}}"
+    )
+    cleaned = clean_shortcodes(text)
+    assert "{{< summary >}}要約\n- 点{{< /summary >}}" in cleaned
+    assert '{{< stat value="2.4倍" label="寿命" >}}' in cleaned and 'value="5"' not in cleaned
+    assert '{{< flow "測る" "直す" >}}' in cleaned and "1つだけ" not in cleaned
+    assert "{{< ask >}}" not in cleaned and "閉じ忘れ" in cleaned
+    assert "{{< tanerisu >}}こんにちは{{< /tanerisu >}}" in cleaned
+    assert cleaned.count("{{< /term >}}") == 1
+    assert "youtube" not in cleaned and "notice" not in cleaned and "注意" in cleaned
+
+
+def test_paper_parts_ask_for_components_and_see_earlier_parts(tmp_path):
+    llm = RecordingLLM()
+    paper_agent(tmp_path, llm=llm).run_once()
+    writes = [u for s, u in llm.calls if "TASK: write_section" in s]
+    assert len(writes) == 7
+    by_part = {re.search(r"# 今回書くパート\n(.+)", u).group(1): u for u in writes}
+    assert "{{< flow" in by_part["何をしたの？"] and "{{< stat " in by_part["何がすごいの？"]
+    assert "{{< term" in by_part["用語ミニ辞典"] and "{{< summary >}}" in by_part["ひとことで言うと"]
+    assert "ここまでに書いた内容" not in writes[0]
+    assert "## ひとことで言うと" in by_part["何をしたの？"]  # earlier parts are shown to avoid repeats
+    assert any("TASK: review_article" in s and "論文解説の記事" in s for s, u in llm.calls)
+
+
+NEWS_RSS = b"""<?xml version="1.0"?><rss version="2.0"><channel><title>news</title>
+<item><title>Physicists build a longer-lived qubit</title><link>https://news.example/1</link>
+<description>See https://arxiv.org/abs/2501.00009 for the paper.</description></item>
+</channel></rss>"""
+
+
+def days_ago(n: int) -> str:
+    return (date.today() - timedelta(days=n)).isoformat()
+
+
+class HotFetch(ArxivFetch):
+    def __call__(self, url: str) -> bytes:
+        self.urls.append(url)
+        if url.startswith("https://news.example"):
+            return NEWS_RSS
+        if "search_query=" in url:
+            return arxiv_feed(
+                arxiv_entry("2501.00001", "A small tweak", "We prove a bound.", published=days_ago(8)),
+                arxiv_entry("2501.00002", "Logical qubits on a big processor", "We demonstrate an experiment.",
+                            extra="<arxiv:comment>Accepted in Nature</arxiv:comment>", authors=40,
+                            published=days_ago(7)))
+        if "id_list=2501.00009" in url:
+            return arxiv_feed(arxiv_entry("2501.00009", "A longer-lived qubit", "We build a device.",
+                                          published=days_ago(27)))
+        return super().__call__(url)
+
+
+def test_hot_recent_papers_are_ranked_before_the_llm_picks(tmp_path):
+    llm = RecordingLLM()
+    fetch = HotFetch()
+    cfg_path = make_config(tmp_path, scout=False)
+    text = cfg_path.read_text(encoding="utf-8").replace(
+        "[strategies.content_publisher]\n",
+        '[strategies.content_publisher]\nsource = "arxiv"\npapers = []\narxiv_query = "cat:quant-ph"\n'
+        'recent_days = 14\nnews_feeds = ["https://news.example/rss"]\n')
+    cfg_path.write_text(text, encoding="utf-8")
+    agent = Agent(load_config(cfg_path), llm=llm, fetch=fetch)
+    agent.run_once()
+
+    search = next(u for u in fetch.urls if "search_query=" in u)
+    assert "submittedDate" in urllib.parse.unquote_plus(search)
+    pick = next(u for s, u in llm.calls if "TASK: pick_paper" in s)
+    assert "Physicists build a longer-lived qubit" in pick  # news headlines give context
+    order = re.findall(r"^ID: (\S+)", pick, flags=re.M)
+    assert order == ["2501.00009", "2501.00002", "2501.00001"]  # news > venue + big team > plain
+    assert "ニュース記事で紹介されている" in pick and "Accepted in Nature" in pick
+    assert articles(agent)[0].payload["arxiv_id"] == "2501.00009"
+
+
+class PickNothingLLM(MockLLM):
+    def complete(self, system, user, *, json_mode=False, max_tokens=1500):
+        if "TASK: pick_paper" in system:
+            return LLMResponse('{"ids": []}')
+        return super().complete(system, user, json_mode=json_mode, max_tokens=max_tokens)
+
+
+def test_falls_back_to_the_most_talked_about_paper(tmp_path):
+    agent = paper_agent(tmp_path, llm=PickNothingLLM(), fetch=HotFetch(), papers="[]")
+    agent.run_once()
+    assert articles(agent)[0].payload["arxiv_id"] == "2501.00002"
+
+
+def test_ids_in_text_finds_arxiv_links():
+    assert ids_in_text(b'<a href="https://arxiv.org/abs/2501.00009v2">x</a> arxiv.org/pdf/2501.00009 '
+                       b"https://www.arxiv.org/html/2410.12345") == ["2501.00009", "2410.12345"]

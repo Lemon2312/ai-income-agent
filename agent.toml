@@ -28,15 +28,19 @@ tags = ["論文解説", "量子コンピュータ"]
 
 # 記事のもとにする論文（arXiv）
 source = "arxiv"
-# 解説したい論文の arXiv 番号。上から順に記事にし、書き終えたものは飛ばします。
-# 番号は論文ページのURL（https://arxiv.org/abs/2408.13687 の「2408.13687」）です
-papers = [
-  "2408.13687",  # Quantum error correction below the surface code threshold（Google, 2024）
-]
-# 上のリストを書き終えたら、この条件に合う新着論文の中から、AIが初心者向けの解説に合うものを選びます。
-# 空（""）にすると、リストにある論文だけを記事にします
+# 必ず解説したい論文の arXiv 番号（任意）。ここにある論文を最優先で、上から順に記事にします。
+# 番号は論文ページのURL（https://arxiv.org/abs/2408.13687 の「2408.13687」）です。例: papers = ["2408.13687"]
+papers = []
+# リストが空のときは、この条件に合う「最近 recent_days 日以内」の論文の中から、
+# 話題のサイン（ニュースでの紹介、有名な論文誌への掲載、大規模な共同研究など）が多いものを優先して、AIが選びます
 arxiv_query = 'cat:quant-ph AND (abs:"quantum computer" OR abs:"quantum computing" OR abs:"quantum processor" OR abs:"quantum error correction" OR abs:"quantum algorithm" OR abs:"logical qubit")'
-arxiv_candidates = 40          # AIに見せる新着論文の数
+recent_days = 14               # 何日前までの論文を候補にするか
+arxiv_candidates = 60          # arXiv から取ってくる候補の数
+pick_from = 15                 # 話題のサインが多い順に、AIに見せる候補の数
+# 話題を知るためのニュース（RSS）。見出しをAIに見せ、記事中の arXiv へのリンクは「ニュースで紹介」として優先します
+news_feeds = [
+  "https://phys.org/rss-feed/physics-news/quantum-physics/",
+]
 read_full_text = true          # 要旨に加えて、論文本文（arXivのHTML版がある場合）も読ませる
 
 # 論文解説の執筆ルール。企画・執筆・採点のすべてでAIに渡され、違反した記事は0点になります
@@ -63,7 +67,7 @@ max_articles_per_day = 1       # 1日の上限（プルリクエストで届い�
 # 品質チェック: AI編集長が5項目（実用性・正確性・深さ・読みやすさ・表現の適切さ）を5点満点で採点。
 # 正確性は、元の論文の要旨・本文と照らし合わせて採点します。
 # 平均4点（= 0.8）以上で合格。未満なら見出しごとに書き直し、それでもダメなら公開しない
-min_chars = 2500
+min_chars = 2000
 min_quality = 0.8
 max_revisions = 2
 max_attempts_per_topic = 2     # 不合格になった論文を書き直す回数の上限（それを超えたら諦めて次へ）
