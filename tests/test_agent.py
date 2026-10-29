@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import urllib.error
 import urllib.parse
 from datetime import date, timedelta
 import subprocess
@@ -11,7 +12,8 @@ from pathlib import Path
 import pytest
 
 from income_agent.agent import Agent
-from income_agent.arxiv import fetch_full_text, ids_in_text, normalize_id, parse_papers
+from income_agent import arxiv
+from income_agent.arxiv import fetch_full_text, fetch_papers, ids_in_text, normalize_id, parse_papers
 from income_agent.cli import main
 from income_agent.config import load_config
 from income_agent.feeds import parse_feed
@@ -759,3 +761,31 @@ def test_falls_back_to_the_most_talked_about_paper(tmp_path):
 def test_ids_in_text_finds_arxiv_links():
     assert ids_in_text(b'<a href="https://arxiv.org/abs/2501.00009v2">x</a> arxiv.org/pdf/2501.00009 '
                        b"https://www.arxiv.org/html/2410.12345") == ["2501.00009", "2410.12345"]
+
+
+def test_arxiv_requests_wait_and_retry_when_busy(monkeypatch):
+    waits = []
+    monkeypatch.setattr(arxiv, "_sleep", waits.append)
+    replies = [429, 503, None]
+
+    def busy_fetch(url):
+        code = replies.pop(0)
+        if code:
+            headers = {"Retry-After": "7"} if code == 503 else {}
+            raise urllib.error.HTTPError(url, code, "busy", headers, None)
+        return arxiv_feed(LISTED)
+
+    assert [p.id for p in fetch_papers(busy_fetch, ["2408.13687"])] == ["2408.13687"]
+    assert waits == [5, 7]
+
+    def missing(url):
+        raise urllib.error.HTTPError(url, 404, "not found", {}, None)
+
+    with pytest.raises(urllib.error.HTTPError):
+        fetch_papers(missing, ["2408.13687"])
+    assert waits == [5, 7]  # other errors are not retried
+
+    monkeypatch.setattr(arxiv, "RETRY_WAITS", (1,))
+    with pytest.raises(urllib.error.HTTPError):
+        fetch_papers(lambda url: (_ for _ in ()).throw(urllib.error.HTTPError(url, 429, "busy", {}, None)),
+                     ["2408.13687"])

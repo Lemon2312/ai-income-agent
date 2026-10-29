@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import re
+import time
+import urllib.error
 import urllib.parse
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
@@ -13,6 +15,10 @@ API_URL = "https://export.arxiv.org/api/query"
 ATOM = "{http://www.w3.org/2005/Atom}"
 ARXIV = "{http://arxiv.org/schemas/atom}"
 ID_IN_TEXT = re.compile(r"arxiv\.org/(?:abs|pdf|html)/(\d{4}\.\d{4,5})")
+# arXiv answers 429/503 when it is busy or a shared address (such as a GitHub Actions
+# runner) has made many requests; it asks clients to wait and try again.
+RETRY_WAITS = (5, 20, 60)
+_sleep = time.sleep
 
 
 @dataclass
@@ -48,6 +54,18 @@ def _text(el: ET.Element, tag: str, ns: str = ATOM) -> str:
     return " ".join((child.text or "").split()) if child is not None else ""
 
 
+def _api_get(fetch: Fetcher, url: str) -> bytes:
+    for wait in (*RETRY_WAITS, None):
+        try:
+            return fetch(url)
+        except urllib.error.HTTPError as e:
+            if e.code not in (429, 503) or wait is None:
+                raise
+            retry_after = (e.headers or {}).get("Retry-After", "")
+            _sleep(min(int(retry_after), 120) if retry_after.isdigit() else wait)
+    raise AssertionError("unreachable")
+
+
 def parse_papers(data: bytes) -> list[Paper]:
     papers = []
     for entry in ET.fromstring(data).iter(ATOM + "entry"):
@@ -73,7 +91,7 @@ def fetch_papers(fetch: Fetcher, ids: list[str]) -> list[Paper]:
         return []
     ids = [normalize_id(i) for i in ids]
     query = urllib.parse.urlencode({"id_list": ",".join(ids), "max_results": len(ids)})
-    found = {p.id: p for p in parse_papers(fetch(f"{API_URL}?{query}"))}
+    found = {p.id: p for p in parse_papers(_api_get(fetch, f"{API_URL}?{query}"))}
     return [found[i] for i in ids if i in found]
 
 
@@ -85,7 +103,7 @@ def search_papers(fetch: Fetcher, query: str, max_results: int = 40, days: int =
         query = f"({query}) AND submittedDate:[{now - timedelta(days=days):%Y%m%d}0000 TO {now:%Y%m%d}2359]"
     params = urllib.parse.urlencode({"search_query": query, "sortBy": "submittedDate",
                                      "sortOrder": "descending", "max_results": max_results})
-    return parse_papers(fetch(f"{API_URL}?{params}"))
+    return parse_papers(_api_get(fetch, f"{API_URL}?{params}"))
 
 
 def fetch_full_text(fetch: Fetcher, paper: Paper, limit: int = 12000) -> str:
