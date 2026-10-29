@@ -39,7 +39,8 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GH_TOKEN: ${{ github.token }}
-        run: income-agent -c agent.toml run --once
+        # 「Run workflow」で手動実行したときは、1日の記事数の上限を無視する（作った記事も上限に数えない）
+        run: income-agent -c agent.toml run --once ${{ github.event_name == 'workflow_dispatch' && '--manual' || '' }}
       - name: Save agent state
         if: ${{ !cancelled() }}
         run: |

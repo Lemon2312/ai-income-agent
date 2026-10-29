@@ -298,15 +298,20 @@ class ContentPublisher(Strategy):
 
     def remaining_today(self) -> int:
         """Articles that may still be generated today: published + waiting for review
-        both count, so an unattended approval queue doesn't pile up either."""
+        both count, so an unattended approval queue doesn't pile up either. Articles
+        made in manual runs are not counted, so trying things by hand never uses up
+        the schedule's quota."""
         limit = int(self.cfg.get("max_articles_per_day", 2))
         since = day_start_iso(self.ctx.timezone)
-        published = self.ctx.store.count_actions(self.name, "article", DONE, since=since)
-        pending = self.ctx.store.count_actions(self.name, "article", PENDING)
-        return max(0, limit - published - pending)
+        used = sum(1 for a in self.ctx.store.list_actions(None, limit=1000)
+                   if a.strategy == self.name and a.kind == "article" and not a.payload.get("manual")
+                   and (a.status == PENDING or (a.status == DONE and (a.decided_at or a.created_at) >= since)))
+        return max(0, limit - used)
 
     def run(self) -> list[int]:
-        count = min(int(self.cfg.get("articles_per_run", 1)), self.remaining_today())
+        per_run = int(self.cfg.get("articles_per_run", 1))
+        # Manual runs ignore the daily limit; the LLM budget still applies.
+        count = per_run if self.ctx.manual else min(per_run, self.remaining_today())
         if count <= 0:
             self.log.info("daily article limit reached; skipping")
             return []
@@ -642,6 +647,8 @@ class ContentPublisher(Strategy):
         payload: dict[str, Any] = {"draft_path": str(path), "quality": review["score"],
                                    "quality_history": history, "scores": review["scores"],
                                    "issues": review["issues"], "chars": _body_chars(body)}
+        if self.ctx.manual:
+            payload["manual"] = True
         if paper:
             payload.update(arxiv_id=paper.id, paper_url=paper.url, paper_title=paper.title)
 

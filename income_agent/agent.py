@@ -22,14 +22,14 @@ class CycleResult:
 
 class Agent:
     def __init__(self, config: Config, *, llm: LLM | None = None,
-                 fetch: Fetcher = http_fetch, store: Store | None = None):
+                 fetch: Fetcher = http_fetch, store: Store | None = None, manual: bool = False):
         self.config = config
         inner = llm or build_llm(config.llm)
         self.store = store or Store(config.agent.data_dir / "agent.db")
         self.llm = BudgetedLLM(inner, self.store, config.llm, config.agent)
         self.ctx = Context(llm=self.llm, store=self.store, data_dir=config.agent.data_dir,
                            fetch=fetch, currency=config.agent.currency,
-                           timezone=config.agent.timezone)
+                           timezone=config.agent.timezone, manual=manual)
         self.strategies: dict[str, Strategy] = {}
         for name, cfg in config.strategies.items():
             cls = REGISTRY.get(name)

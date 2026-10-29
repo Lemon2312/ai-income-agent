@@ -19,6 +19,7 @@ class Context:
     fetch: Fetcher
     currency: str
     timezone: str = "Asia/Tokyo"
+    manual: bool = False  # started by hand (e.g. "Run workflow"), not by the schedule
 
 
 class Strategy(ABC):
