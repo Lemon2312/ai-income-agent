@@ -1,0 +1,30 @@
+{{- /* A qubit to play with: tilt the arrow to change the chances of 0 and 1, then measure it.
+       Usage: {{< qubit >}} or {{< qubit theta="90" >}} (the arrow's starting tilt, 0 = always 0 … 180 = always 1). */ -}}
+{{- $theta := .Get "theta" | default "90" -}}
+<figure class="qx qx-qubit reveal" data-theta="{{ $theta }}">
+  <p class="qx-title">量子ビットを動かしてみよう</p>
+  <div class="qx-stage">
+    <svg class="qx-draw" viewBox="0 0 220 224" role="img" aria-label="量子ビットの状態を表す矢印。真上が0、真下が1">
+      <circle cx="110" cy="112" r="84" class="qx-ring"/>
+      <line x1="26" y1="112" x2="194" y2="112" class="qx-axis"/>
+      <text x="110" y="18" class="qx-label">|0⟩</text>
+      <text x="110" y="220" class="qx-label">|1⟩</text>
+      <text x="198" y="106" class="qx-small" text-anchor="end">半々</text>
+      <line class="qx-arrow" x1="110" y1="112" x2="110" y2="28"/>
+      <circle class="qx-tip" cx="110" cy="28" r="7"/>
+    </svg>
+    <div class="qx-side">
+      <label class="qx-range"><span>矢印の傾き</span><input type="range" min="0" max="180" step="1" value="{{ $theta }}"></label>
+      <div class="qx-probs">
+        <div class="qx-prob"><span>0 が出る確率</span><b class="js-p0"></b><i><s class="js-b0"></s></i></div>
+        <div class="qx-prob is-one"><span>1 が出る確率</span><b class="js-p1"></b><i><s class="js-b1"></s></i></div>
+      </div>
+      <div class="qx-buttons">
+        <button class="qx-btn js-measure" type="button">測定する</button>
+        <button class="qx-btn js-many" type="button">100回測定</button>
+        <button class="qx-btn is-ghost js-reset" type="button">結果を消す</button>
+      </div>
+      <p class="qx-status" aria-live="polite">矢印を傾けてから、測定してみよう</p>
+    </div>
+  </div>
+</figure>

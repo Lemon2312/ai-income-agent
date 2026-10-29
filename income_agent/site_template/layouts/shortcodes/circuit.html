@@ -1,0 +1,23 @@
+{{- /* A small quantum circuit that runs one gate at a time and shows the chance of each result.
+       Usage: {{< circuit qubits="2" gates="H 0; CNOT 0 1; M" >}} — 1-3 qubits; gates H n, X n, Z n, CNOT control target,
+       and M (measure every qubit) at the end. */ -}}
+<figure class="qx qx-circuit reveal" data-qubits="{{ .Get "qubits" }}" data-gates="{{ .Get "gates" }}">
+  <p class="qx-title">量子回路を1ステップずつ動かしてみよう</p>
+  <div class="qx-stage">
+    <svg class="qx-draw js-wires" role="img" aria-label="量子回路：{{ .Get "gates" }}"></svg>
+    <div class="qx-side">
+      <div class="qx-buttons">
+        <button class="qx-btn is-ghost js-back" type="button">◀ 戻る</button>
+        <button class="qx-btn js-next" type="button">次へ ▶</button>
+        <button class="qx-btn is-ghost js-reset" type="button">最初から</button>
+      </div>
+      <p class="qx-step" aria-live="polite"></p>
+      <div class="qx-states js-states"></div>
+      <div class="qx-buttons js-measure-row" hidden>
+        <button class="qx-btn js-measure" type="button">測定する</button>
+        <button class="qx-btn js-many" type="button">100回測定</button>
+      </div>
+      <p class="qx-status" aria-live="polite"></p>
+    </div>
+  </div>
+</figure>

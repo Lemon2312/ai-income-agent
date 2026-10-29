@@ -1,10 +1,10 @@
 name: Blog agent
 
 on:
-  # 自動実行は一時停止中。再開するときは下の3行のコメントを外す
-  # schedule:
-  #   # 毎日 9:23 と 18:23（日本時間）。毎時0分は GitHub が混雑して実行が飛ばされやすいため、ずらしている
-  #   - cron: "23 0,9 * * *"
+  # 一時停止するときは、下の3行をコメントにする
+  schedule:
+    # 毎日 9:23 と 18:23（日本時間）。毎時0分は GitHub が混雑して実行が飛ばされやすいため、ずらしている
+    - cron: "23 0,9 * * *"
   workflow_dispatch:         # Actions タブの「Run workflow」で手動実行
 
 permissions:
