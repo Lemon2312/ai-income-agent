@@ -84,7 +84,7 @@ TOP_VENUES = re.compile(r"\b(Nature|Science|Physical Review Letters|PRL|PRX|Phys
 EXPERIMENTAL = re.compile(r"\b(experiment\w*|demonstrat\w*|realiz\w*|implement\w*|processor|hardware|device)\b", re.I)
 
 PAPER_SECTIONS = ["ひとことで言うと", "なぜこの研究が必要？", "何をしたの？", "何がすごいの？",
-                  "まだできないこと・課題", "用語ミニ辞典"]
+                  "まだできないこと・課題", "クイズでチェック", "用語ミニ辞典"]
 
 PAPER_RULES = """- 論文の成果・数値・主張は、下の「論文の要旨」と「論文本文の抜粋」に書かれているものだけを使う。書かれていない結果や数値を作らない
 - 数値を書くときは、何の数値か（どの条件・どの装置・どの単位か）を論文どおり正確に書く。別の条件の数値と取り違えない
@@ -103,7 +103,9 @@ PAPER_STYLES: dict[str | None, str] = {
           "{{< tanerisu >}}ひとこと{{< /tanerisu >}}",
     "ひとことで言うと": "次の形の要約ボックスだけを書く（ボックスの外に文章は書かない）:\n"
                        "{{< summary >}}\nこの研究の成果を1〜2文で（数値は入れても1つまで）\n\n- ポイント1\n- ポイント2\n- ポイント3\n{{< /summary >}}",
-    "なぜこの研究が必要？": "身近なたとえ話を1つ使う。途中に、読者が抱きそうな疑問を1つ書き、すぐあとでタネリスが答える:\n"
+    "なぜこの研究が必要？": "研究が解こうとしている問題を、裏返せるカードで示す（表は論文の言葉での説明、裏は身近なたとえ話。どちらも2文以内）:\n"
+                         '{{< flip real="論文の言葉での説明" analogy="身近なたとえ話" >}}\n'
+                         "途中に、読者が抱きそうな疑問を1つ書き、すぐあとでタネリスが答える:\n"
                          "{{< ask >}}読者の疑問{{< /ask >}}\n{{< tanerisu >}}答え{{< /tanerisu >}}",
     "何をしたの？": "研究でしたことを3〜5ステップの図にする（各ステップは20字以内）:\n"
                   '{{< flow "ステップ1" "ステップ2" "ステップ3" >}}\n'
@@ -111,23 +113,28 @@ PAPER_STYLES: dict[str | None, str] = {
     "何がすごいの？": "論文の要旨・本文の抜粋にそのまま書かれている数値を2〜4個選び、数字カードにする:\n"
                     '{{< stats >}}\n{{< stat value="2.4倍" label="何の数値か（条件も正確に）" >}}\n{{< /stats >}}\n'
                     "value は数値から始める（例: 2.4倍、0.143%、101個）。論文にない数値や、自分で計算した数値は使わない。"
-                    "使える数値がなければ数字カードは使わず、これまでとの違いを表で示す。カードのあとで、それぞれの数値の意味を説明する",
+                    "使える数値がなければ数字カードは使わず、これまでとの違いを表で示す。カードのあとで、それぞれの数値の意味を説明する。\n"
+                    "論文に「これまで」と「今回」など比べられる数値が両方書かれているときだけ、棒グラフも使う（同じ単位の数値だけ。value は数字のみ）:\n"
+                    '{{< bars unit="%" >}}\n{{< bar label="これまで" value="12" >}}\n{{< bar label="今回" value="3" >}}\n{{< /bars >}}',
     "まだできないこと・課題": "課題を箇条書き（2〜4個）で示し、それぞれ1〜2文で説明する。最後に、タネリスが今後に期待することを一言:\n"
                           '{{< tanerisu mood="puzzled" >}}ひとこと{{< /tanerisu >}}',
+    "クイズでチェック": "この記事の内容から、読者が答えられるクイズを2問、次の形だけで書く（ほかの文章は書かない。答えは記事と論文に書かれていることだけ）:\n"
+                       '{{< quiz q="問題文" a="答えと1文の解説" >}}',
     "用語ミニ辞典": "この記事に出てきた専門用語を3〜5個、次の形だけで書く（ほかの文章は書かない）:\n"
                   '{{< term name="用語" >}}中学生にもわかる1〜2文の説明{{< /term >}}',
 }
 
 # Shortcodes the site provides, and whether they wrap content. Anything else the LLM writes
 # (or a broken one) is removed, because an unknown or unclosed shortcode fails the whole Hugo build.
-SHORTCODES = {"summary": True, "stats": True, "ask": True, "tanerisu": True, "term": True,
-              "stat": False, "flow": False}
+SHORTCODES = {"summary": True, "stats": True, "ask": True, "tanerisu": True, "term": True, "bars": True,
+              "stat": False, "flow": False, "flip": False, "bar": False, "quiz": False}
 _SHORTCODE = re.compile(r"\{\{[<%](.*?)[>%]\}\}")
 # "{{< flow "a" "b" }}": the closing ">" is the most common slip; Hugo fails the build on it.
 _MISSING_CLOSER = re.compile(r"\{\{([<%])([^{}\n]*?[^>%\s])\s*\}\}")
 _STRAY_DELIMITER = re.compile(r"\{\{[<%]|[>%]\}\}")
-_BLOCK_OPEN = re.compile(r"[ \t]*(\{\{< (?:summary|stats|ask|tanerisu|term|flow)\b)")
-_BLOCK_CLOSE = re.compile(r"(\{\{< /(?:summary|stats|ask|tanerisu|term) >\}\}|\{\{< flow [^\n]*?>\}\})[ \t]*")
+_BLOCK_OPEN = re.compile(r"[ \t]*(\{\{< (?:summary|stats|bars|ask|tanerisu|term|flow|flip|quiz)\b)")
+_BLOCK_CLOSE = re.compile(r"(\{\{< /(?:summary|stats|bars|ask|tanerisu|term) >\}\}"
+                          r"|\{\{< (?:flow|flip|quiz) [^\n]*?>\}\})[ \t]*")
 
 _SUPERSCRIPT = str.maketrans("0123456789-+", "⁰¹²³⁴⁵⁶⁷⁸⁹⁻⁺")
 _SUBSCRIPT = str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉")
@@ -168,10 +175,16 @@ def _shortcode_params(name: str, args: str) -> str | None:
     if re.sub(_NAMED, "", args).strip():
         return None
     named = dict(_NAMED.findall(args))
-    required = {"stat": ("value", "label"), "term": ("name",)}.get(name, ())
+    fields = {"stat": ("value", "label"), "term": ("name",), "flip": ("real", "analogy"),
+              "bar": ("label", "value"), "quiz": ("q", "a")}
+    required = fields.get(name, ())
     if any(not named.get(k, "").strip() for k in required):
         return None
-    allowed = {"stat": ("value", "label"), "term": ("name",), "tanerisu": ("mood", "side")}.get(name, ())
+    if name == "bar" and not re.fullmatch(r"\d+(\.\d+)?", named["value"].strip().replace(",", "")):
+        return None  # bar widths are computed from the number
+    if name == "bar":
+        named["value"] = named["value"].strip().replace(",", "")
+    allowed = {**fields, "tanerisu": ("mood", "side"), "bars": ("unit",)}.get(name, ())
     if name == "tanerisu" and named.get("mood") not in (None, "", "happy", "puzzled"):
         named.pop("mood")
     return " ".join(f'{k}="{named[k].strip()}"' for k in allowed if named.get(k, "").strip())
@@ -223,7 +236,7 @@ def clean_shortcodes(markdown: str) -> str:
 PAPER_SECTION_SYSTEM = """TASK: write_section
 あなたは、研究論文を専門知識のない読者にやさしく、楽しく解説するライターです。記事のうち、指定された1つのパートだけをMarkdownで書いてください。
 - 見出し（## ）は書かず、本文だけを出力する
-- 「表現のしかた」に書かれた {{< >}} の部品（要約ボックス・図・数字カード・会話・用語カード）を、書かれた形のとおりに使う。部品の名前や書き方を変えない
+- 「表現のしかた」に書かれた {{< >}} の部品（要約ボックス・図・数字カード・棒グラフ・たとえカード・会話・クイズ・用語カード）を、書かれた形のとおりに使う。部品の名前や書き方を変えない
 - 文章は短い段落で、話しかけるように書く。読者がワクワクするように、何が新しいのかをはっきり伝える"""
 
 PAPER_REVISE_SYSTEM = """TASK: revise_section
@@ -240,7 +253,8 @@ PAPER_REVIEW_SYSTEM = """TASK: review_article
 - readability: 短い段落・図・数字カード・会話などで読みやすく、同じ説明の繰り返しがないか
 - compliance: 誇張・断定や「執筆ルール」への違反がないか（あれば1点）
 注意:
-- 記事の中の {{< … >}} は、要約ボックス・図・数字カード・会話・用語カードを表示する部品なので、中の文章を本文として評価する
+- 記事の中の {{< … >}} は、要約ボックス・図・数字カード・棒グラフ・たとえカード・会話・クイズ・用語カードを表示する部品なので、中の文章を本文として評価する
+- クイズの答えが記事や論文の内容と合っているかも accuracy で確かめる
 - issues には、どの見出しをどう直すべきかを具体的に書く（4点以上の項目については書かなくてよい）
 必ず次のJSONのみを返してください:
 {"scores": {"usefulness": 1-5, "accuracy": 1-5, "depth": 1-5, "readability": 1-5, "compliance": 1-5},

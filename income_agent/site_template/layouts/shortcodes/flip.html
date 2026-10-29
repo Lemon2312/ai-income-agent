@@ -1,0 +1,8 @@
+{{- /* Card that turns over from the real explanation to an analogy. Usage: {{< flip real="専門的な説明" analogy="たとえ話" >}} */ -}}
+<button class="flip reveal" type="button" aria-pressed="false">
+  <span class="flip-inner">
+    <span class="flip-face flip-front"><span class="flip-tag">論文の言葉でいうと</span><span class="flip-text">{{ .Get "real" | .Page.RenderString }}</span></span>
+    <span class="flip-face flip-back"><span class="flip-tag">たとえるなら</span><span class="flip-text">{{ .Get "analogy" | .Page.RenderString }}</span></span>
+  </span>
+  <span class="flip-hint" aria-hidden="true"><span class="flip-hint-front">タップでたとえ話に切りかえ ↻</span><span class="flip-hint-back">タップで論文の言葉にもどす ↻</span></span>
+</button>

@@ -380,6 +380,52 @@ html:not(.js) .to-top { display: none; }
 .term-name { display: block; margin-bottom: 4px; font-weight: 800; }
 .term-body p { margin: 0; }
 .term-body p + p { margin-top: .5em; }
+.flip {
+  display: block; width: 100%; margin: 1.6em 0; padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: left;
+  cursor: pointer; perspective: 1200px; -webkit-tap-highlight-color: transparent;
+}
+.flip-inner { display: grid; transition: transform .7s cubic-bezier(.3, 1.3, .5, 1); transform-style: preserve-3d; }
+.flip.is-flipped .flip-inner { transform: rotateY(180deg); }
+.flip-face {
+  grid-area: 1 / 1; display: flex; flex-direction: column; gap: 6px; padding: 20px 22px; border-radius: 18px;
+  backface-visibility: hidden; -webkit-backface-visibility: hidden; line-height: 1.8;
+}
+.flip-front { background: var(--surface); border: 2px solid var(--border); }
+.flip-back { transform: rotateY(180deg); background: var(--soft); border: 2px solid var(--accent); }
+.flip-tag { font-size: .75rem; font-weight: 800; letter-spacing: .08em; color: var(--accent-2); }
+.flip-back .flip-tag { color: var(--accent); }
+.flip-hint { display: block; margin-top: 8px; text-align: right; font-size: .78rem; color: var(--muted); }
+.flip-hint-back, .flip.is-flipped .flip-hint-front { display: none; }
+.flip.is-flipped .flip-hint-back { display: inline; }
+.flip:focus-visible .flip-inner { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 18px; }
+.bars { display: grid; gap: 12px; margin: 1.6em 0; padding: 18px 20px; border-radius: 16px; background: var(--surface); border: 1px solid var(--border); }
+.bar { display: grid; grid-template-columns: minmax(70px, 30%) 1fr auto; align-items: center; gap: 12px; font-size: .9rem; }
+.bar-label { color: var(--muted); line-height: 1.5; }
+.bar-track { height: 16px; border-radius: 999px; background: var(--soft); overflow: hidden; }
+.bar-fill { display: block; height: 100%; width: var(--w, 100%); border-radius: inherit; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+.js .bars .bar-fill { width: 0; transition: width 1.2s cubic-bezier(.2, .7, .2, 1); }
+.js .bars.is-grown .bar-fill { width: var(--w, 100%); }
+.bar-value { font-weight: 800; font-variant-numeric: tabular-nums; }
+.quiz { margin: 1em 0; border-radius: 16px; background: var(--surface); border: 1px solid var(--border); overflow: hidden; }
+.quiz summary { display: flex; align-items: center; gap: 12px; padding: 14px 18px; cursor: pointer; list-style: none; font-weight: 700; line-height: 1.6; }
+.quiz summary::-webkit-details-marker { display: none; }
+.quiz-q { flex: 1; }
+.quiz-tag {
+  flex: none; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%;
+  color: #fff; font-size: .85rem; font-weight: 800; background: var(--accent-2);
+}
+.quiz-tag.is-answer { background: var(--accent); }
+.quiz-open { flex: none; padding: 3px 12px; border-radius: 999px; font-size: .75rem; color: var(--accent); border: 1px solid var(--accent); }
+.quiz[open] .quiz-open { visibility: hidden; }
+.quiz-a { display: flex; align-items: flex-start; gap: 12px; padding: 4px 18px 16px; line-height: 1.8; }
+.quiz[open] .quiz-a { animation: quiz-pop .45s cubic-bezier(.3, 1.4, .5, 1); }
+@keyframes quiz-pop { from { opacity: 0; transform: translateY(-6px) scale(.98); } }
+.flow-step { transition: background-color .4s, border-color .4s, box-shadow .4s, transform .4s; }
+.flow-step.is-active { background: var(--surface); border-color: var(--accent); box-shadow: var(--shadow); transform: translateY(-3px); }
+.flow-step.is-active .flow-num { animation: flow-ping 1.2s ease-out; }
+.flow-step.is-active::after { animation: flow-arrow 1.2s ease-in-out; }
+@keyframes flow-ping { 0% { box-shadow: 0 0 0 0 rgba(29, 122, 76, .5); } 100% { box-shadow: 0 0 0 12px rgba(29, 122, 76, 0); } }
+@keyframes flow-arrow { 50% { opacity: .3; } }
 
 .not-found { text-align: center; padding: 32px 0; }
 .not-found-mascot { width: 160px; margin: 0 auto 8px; }
@@ -400,6 +446,8 @@ html:not(.js) .to-top { display: none; }
   .flow { flex-direction: column; gap: 30px; }
   .flow-step:not(:last-child)::after { content: "↓"; right: auto; left: 50%; top: auto; bottom: -27px; transform: translateX(-50%); }
   .ask-avatar { width: 44px; height: 44px; font-size: 1.3rem; }
+  .bar { grid-template-columns: 1fr auto; }
+  .bar-track { grid-column: 1 / -1; grid-row: 2; }
   body { font-size: 16px; }
   .hero { padding: 40px 22px; border-radius: 18px; }
   .featured-link { grid-template-columns: 1fr; }

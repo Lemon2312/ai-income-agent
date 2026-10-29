@@ -98,6 +98,52 @@
     requestAnimationFrame(frame);
   }
 
+  // Flip cards turn over between the paper's wording and an analogy.
+  document.querySelectorAll(".flip").forEach(function (card) {
+    card.addEventListener("click", function () {
+      var flipped = card.classList.toggle("is-flipped");
+      card.setAttribute("aria-pressed", String(flipped));
+    });
+  });
+
+  // Bar charts: widths relative to the largest value, grown when they scroll into view.
+  var charts = document.querySelectorAll(".bars");
+  charts.forEach(function (chart) {
+    var bars = chart.querySelectorAll(".bar");
+    var values = Array.prototype.map.call(bars, function (b) { return parseFloat(b.dataset.value) || 0; });
+    var max = Math.max.apply(null, values.concat([0]));
+    bars.forEach(function (b, i) { b.style.setProperty("--w", (max > 0 ? Math.max(2, values[i] / max * 100) : 0) + "%"); });
+  });
+  if (charts.length && "IntersectionObserver" in window && !reduceMotion) {
+    var barIo = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) { e.target.classList.add("is-grown"); barIo.unobserve(e.target); }
+      });
+    }, { rootMargin: "0px 0px -15% 0px" });
+    charts.forEach(function (c) { barIo.observe(c); });
+  } else {
+    charts.forEach(function (c) { c.classList.add("is-grown"); });
+  }
+
+  // Step diagrams light up one step after another while they are on screen.
+  var flows = document.querySelectorAll(".flow");
+  if (flows.length && "IntersectionObserver" in window && !reduceMotion) {
+    var flowIo = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        var flow = e.target;
+        clearInterval(flow._timer);
+        if (!e.isIntersecting) return;
+        var steps = flow.querySelectorAll(".flow-step"), k = -1;
+        flow._timer = setInterval(function () {
+          if (k >= 0) steps[k].classList.remove("is-active");
+          k = (k + 1) % steps.length;
+          steps[k].classList.add("is-active");
+        }, 1400);
+      });
+    }, { threshold: .4 });
+    flows.forEach(function (f) { flowIo.observe(f); });
+  }
+
   var tocLinks = document.querySelectorAll(".toc a");
   if (tocLinks.length && "IntersectionObserver" in window) {
     var byId = {};
