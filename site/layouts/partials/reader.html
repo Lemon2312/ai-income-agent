@@ -6,52 +6,55 @@
   <g class="mascot-body">
     {{- if not $mood }}
     <g class="reader-hand">
-      <path class="reader-arm" d="M90 118C100 106 103 94 101 82"/>
-      <circle cx="101" cy="76" r="6.5" fill="#f1cba8"/>
+      <path class="reader-arm" d="M88 120C99 108 102 96 100 84"/>
+      <circle cx="100" cy="78" r="6.5" fill="#fbe1cc" stroke="#e3b9a0" stroke-width="1"/>
     </g>
     {{- end }}
-    <rect x="53" y="84" width="14" height="22" rx="6" fill="#e6bb95"/>
-    <path d="M20 138C20 113 36 102 60 102S100 113 100 138z" fill="#2c5f8f"/>
-    <path d="M47 103L60 128 73 103z" fill="#f3f5f7"/>
-    <path d="M47 103l9 24M73 103l-9 24" stroke="#1f4a72" stroke-width="3" stroke-linecap="round"/>
-    <path d="M82 106c-4 10-6 20-6 32" fill="none" stroke="#3b3f45" stroke-width="5" stroke-linecap="round"/>
-    <path d="M35 60C35 72 37 82 42 88L45 76 47 60zM85 60C85 72 83 82 78 88L75 76 73 60z" fill="#2f2420"/>
-    <ellipse cx="60" cy="62" rx="25" ry="27" fill="#f1cba8"/>
-    <path d="M34 64C30 38 45 29 61 29S91 38 86 64C85 57 83 52 80 49 79 54 75 56 71 55 71 51 69 49 67 48 63 53 56 55 50 54 51 51 50 49 49 48 45 52 40 54 37 55 35 58 34 61z" fill="#2f2420"/>
-    <path d="M34 58C32 67 33 75 37 81 38 74 39 66 40 59zM86 58C88 67 87 75 83 81 82 74 81 66 80 59z" fill="#2f2420"/>
-    <path d="M47 36c7-3 16-3 23 1" fill="none" stroke="#4a3a33" stroke-width="2" stroke-linecap="round"/>
+    <path class="reader-hair" d="M31 66C27 46 38 27 60 26S93 46 89 66Q93 76 95 84 88 79 85 80 84 86 81 90 79 82 76 80H44Q41 82 39 90 36 86 35 80 32 79 25 84 27 76 31 66z"/>
+    <rect x="54" y="84" width="12" height="18" rx="5" fill="#f4d2bb"/>
+    <path d="M24 138C24 114 40 102 60 102S96 114 96 138z" fill="#8f9c8c" stroke="#76836f" stroke-width="1.2"/>
+    <path d="M50 102L60 120 70 102z" fill="#fdfdfd" stroke="#cfd5d8" stroke-width="1"/>
+    <path d="M49 101l11 9-4-11zM71 101l-11 9 4-11z" fill="#fff" stroke="#cfd5d8" stroke-width="1" stroke-linejoin="round"/>
+    <path d="M50 103L60 121 70 103" fill="none" stroke="#76836f" stroke-width="2.4" stroke-linejoin="round"/>
+    <circle cx="60" cy="114" r="1" fill="#cfd5d8"/>
+    <ellipse cx="60" cy="62" rx="29" ry="28" fill="#fbe1cc"/>
 
     <g class="mascot-face">
       {{- if eq $mood "happy" }}
-      <path class="mascot-stroke" d="M45 65q4-4 8 0M67 65q4-4 8 0"/>
+      <path class="reader-stroke" d="M43 69q5-6 10 0M67 69q5-6 10 0"/>
       {{- else }}
-      {{- $r := cond (eq $mood "surprised") 3.8 3 }}
+      {{- $rx := cond (eq $mood "surprised") 4.2 3.6 }}
       <g class="mascot-eyes">
-        <ellipse class="mascot-eye" cx="49" cy="65" rx="{{ $r }}" ry="{{ add $r 0.7 }}"/>
-        <ellipse class="mascot-eye" cx="71" cy="65" rx="{{ $r }}" ry="{{ add $r 0.7 }}"/>
-        <circle class="mascot-glint" cx="50.1" cy="63.7" r="1.1"/>
-        <circle class="mascot-glint" cx="72.1" cy="63.7" r="1.1"/>
+        <ellipse cx="48" cy="68" rx="{{ $rx }}" ry="{{ add $rx 1 }}" fill="#3d3442"/>
+        <ellipse cx="72" cy="68" rx="{{ $rx }}" ry="{{ add $rx 1 }}" fill="#3d3442"/>
+        <circle class="mascot-glint" cx="49.4" cy="66" r="1.4"/>
+        <circle class="mascot-glint" cx="73.4" cy="66" r="1.4"/>
       </g>
       {{- end }}
       {{- if eq $mood "puzzled" }}
-      <path class="mascot-stroke" d="M43 56q6-3 11 1M66 56q6-2 11-1"/>
-      <path class="mascot-stroke" d="M54 78q3-2 6 0t6 0"/>
+      <path class="reader-stroke" d="M55 80q2.5-2 5 0t5 0"/>
       {{- else if eq $mood "surprised" }}
-      <path class="mascot-stroke" d="M43 55q6-3 11 0M66 55q5-3 11 0"/>
-      <ellipse class="mascot-eye" cx="60" cy="79" rx="3.2" ry="4"/>
+      <ellipse cx="60" cy="81" rx="3" ry="3.8" fill="#6b3b3b"/>
       {{- else if eq $mood "happy" }}
-      <path d="M52 74q8 10 16 0z" fill="#9b3d3d"/>
+      <path d="M51 77q9 2 18 0-2 9-9 9t-9-9z" fill="#fff" stroke="#5b3a3a" stroke-width="1.5" stroke-linejoin="round"/>
       {{- else }}
-      <path class="mascot-stroke" d="M44 57h10M66 57h10"/>
-      <path class="mascot-stroke" d="M55 77q5 3 10 0"/>
+      <path class="reader-stroke" d="M56 79q4 3 8 0"/>
       {{- end }}
-      <ellipse class="mascot-cheek" cx="43" cy="73" rx="5" ry="2.8"/>
-      <ellipse class="mascot-cheek" cx="77" cy="73" rx="5" ry="2.8"/>
+      <ellipse cx="41" cy="76" rx="6" ry="3.2" fill="#f5a3a3" opacity=".55"/>
+      <ellipse cx="79" cy="76" rx="6" ry="3.2" fill="#f5a3a3" opacity=".55"/>
+      <path d="M38 75l-1.5 2.6M41 75l-1.5 2.6M44 75l-1.5 2.6M76 75l-1.5 2.6M79 75l-1.5 2.6M82 75l-1.5 2.6" stroke="#e58585" stroke-width="1" stroke-linecap="round"/>
     </g>
+
+    <path class="reader-hair" d="M29 74C24 48 36 25 60 24S96 48 91 74Q88 66 86 60 84 63 81 65Q80 56 74 50 74 57 71 61Q69 53 63 48 64 56 61 62Q58 53 53 49 54 56 50 61Q48 54 44 51 45 58 41 64Q40 59 37 56 37 62 35 67 32 64 29 74z"/>
+    <path class="reader-hair" d="M32 56Q27 70 28 84 32 78 34 76 35 82 37 86 38 72 40 61zM88 56Q93 70 92 84 88 78 86 76 85 82 83 86 82 72 80 61z"/>
+    <path class="reader-hair" d="M58 26C54 16 61 10 70 13 64 15 62 20 63 26z"/>
+    <path d="M42 37q10-7 23-5M72 34q6 2 10 7" fill="none" stroke="#d3d3de" stroke-width="3" stroke-linecap="round"/>
     {{- if eq $mood "puzzled" }}
-    <text class="mascot-q" x="86" y="38">?</text>
+    <path class="reader-stroke" d="M42 58q5-3 10 0M68 56q5-1 10 2"/>
+    <text class="mascot-q" x="88" y="34">?</text>
     {{- else if eq $mood "surprised" }}
-    <text class="mascot-q" x="88" y="38">!</text>
+    <path class="reader-stroke" d="M42 57q5-4 10-1M68 56q5-3 10 1"/>
+    <text class="mascot-q" x="90" y="34">!</text>
     {{- end }}
   </g>
 </svg>
