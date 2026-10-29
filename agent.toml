@@ -42,6 +42,7 @@ news_feeds = [
   "https://phys.org/rss-feed/physics-news/quantum-physics/",
 ]
 read_full_text = true          # 要旨に加えて、論文本文（arXivのHTML版がある場合）も読ませる
+full_text_chars = 20000        # 論文本文から読ませる文字数の上限（多いほど詳しく書けるが、AI利用料が少し増える）
 
 # 論文解説の執筆ルール。企画・執筆・採点のすべてでAIに渡され、違反した記事は0点になります
 guidelines = [
@@ -67,7 +68,7 @@ max_articles_per_day = 1       # 1日の上限（プルリクエストで届い�
 # 品質チェック: AI編集長が5項目（実用性・正確性・深さ・読みやすさ・表現の適切さ）を5点満点で採点。
 # 正確性は、元の論文の要旨・本文と照らし合わせて採点します。
 # 平均4点（= 0.8）以上で合格。未満なら見出しごとに書き直し、それでもダメなら公開しない
-min_chars = 2000
+min_chars = 5000               # 記事全体の文字数の目安（見出しごとの長さもこれに合わせて変わる）
 min_quality = 0.8
 max_revisions = 2
 max_attempts_per_topic = 2     # 不合格になった論文を書き直す回数の上限（それを超えたら諦めて次へ）

@@ -626,8 +626,9 @@ def test_listed_paper_becomes_an_article_with_its_source(tmp_path):
     assert "arxiv-2408-13687" in draft.name
     text = draft.read_text(encoding="utf-8")
     headings = re.findall(r"^## (.+)$", text, flags=re.M)
-    assert headings == ["ひとことで言うと", "なぜこの研究が必要？", "何をしたの？", "何がすごいの？",
-                        "まだできないこと・課題", "クイズでチェック", "用語ミニ辞典", "元の論文"]
+    assert headings == ["ひとことで言うと", "なぜこの研究が必要？", "何をしたの？", "しくみをもう少しくわしく",
+                        "何がすごいの？", "まだできないこと・課題", "これからどうなる？", "クイズでチェック",
+                        "用語ミニ辞典", "元の論文"]
     assert "[arXiv:2408.13687](https://arxiv.org/abs/2408.13687)" in text
     # Every writing and review prompt carries the abstract and the full-text excerpt.
     for system, user in llm.calls:
@@ -687,7 +688,10 @@ def test_paper_parts_ask_for_components_and_see_earlier_parts(tmp_path):
     llm = RecordingLLM()
     paper_agent(tmp_path, llm=llm).run_once()
     writes = [u for s, u in llm.calls if "TASK: write_section" in s]
-    assert len(writes) == 8
+    assert len(writes) == 10
+    targets = {re.search(r"# 今回書くパート\n(.+)", u).group(1): int(re.search(r"# 文字数\n(\d+)", u).group(1))
+               for u in writes}
+    assert targets["しくみをもう少しくわしく"] > targets["何をしたの？"] > targets["用語ミニ辞典"]
     by_part = {re.search(r"# 今回書くパート\n(.+)", u).group(1): u for u in writes}
     assert "{{< flow" in by_part["何をしたの？"] and "{{< stat " in by_part["何がすごいの？"]
     assert "{{< term" in by_part["用語ミニ辞典"] and "{{< summary >}}" in by_part["ひとことで言うと"]

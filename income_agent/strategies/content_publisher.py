@@ -83,8 +83,11 @@ TOP_VENUES = re.compile(r"\b(Nature|Science|Physical Review Letters|PRL|PRX|Phys
                         r"Nature Communications|Science Advances|npj Quantum)\b", re.I)
 EXPERIMENTAL = re.compile(r"\b(experiment\w*|demonstrat\w*|realiz\w*|implement\w*|processor|hardware|device)\b", re.I)
 
-PAPER_SECTIONS = ["ひとことで言うと", "なぜこの研究が必要？", "何をしたの？", "何がすごいの？",
-                  "まだできないこと・課題", "クイズでチェック", "用語ミニ辞典"]
+# Each section's share of the article (characters at min_chars = 5000); the core sections get the most room.
+PAPER_SECTION_WEIGHTS = {"ひとことで言うと": 250, "なぜこの研究が必要？": 700, "何をしたの？": 700,
+                         "しくみをもう少しくわしく": 1200, "何がすごいの？": 700, "まだできないこと・課題": 600,
+                         "これからどうなる？": 500, "クイズでチェック": 250, "用語ミニ辞典": 400}
+PAPER_SECTIONS = list(PAPER_SECTION_WEIGHTS)
 
 PAPER_RULES = """- 論文の成果・数値・主張は、下の「論文の要旨」と「論文本文の抜粋」に書かれているものだけを使う。書かれていない結果や数値を作らない
 - 数値を書くときは、何の数値か（どの条件・どの装置・どの単位か）を論文どおり正確に書く。別の条件の数値と取り違えない
@@ -110,6 +113,10 @@ PAPER_STYLES: dict[str | None, str] = {
     "何をしたの？": "研究でしたことを3〜5ステップの図にする（各ステップは20字以内）:\n"
                   '{{< flow "ステップ1" "ステップ2" "ステップ3" >}}\n'
                   "図のあとに、各ステップを1〜2文ずつ説明する。数値の詳しい説明は「何がすごいの？」で書くので、ここでは書かない。これまでの方法と比べられるなら、Markdownの表（項目／これまで／今回）を使ってよい",
+    "しくみをもう少しくわしく": "「### 」の小見出しを2〜3個立て、論文本文の抜粋にもとづいて、研究の方法・実験の条件や装置・うまくいった工夫を順に掘り下げる。"
+                              "各小見出しには、この論文ならではの具体的な内容を入れる（一般論で埋めない）。"
+                              "比べると分かりやすいものはMarkdownの表にしてよい。途中で読者がつまずきそうなところに、タネリスの一言を1回だけ入れる:\n"
+                              "{{< tanerisu >}}ひとこと{{< /tanerisu >}}",
     "何がすごいの？": "論文の要旨・本文の抜粋にそのまま書かれている数値を2〜4個選び、数字カードにする:\n"
                     '{{< stats >}}\n{{< stat value="2.4倍" label="何の数値か（条件も正確に）" >}}\n{{< /stats >}}\n'
                     "value は数値から始める（例: 2.4倍、0.143%、101個）。論文にない数値や、自分で計算した数値は使わない。"
@@ -118,6 +125,9 @@ PAPER_STYLES: dict[str | None, str] = {
                     '{{< bars unit="%" >}}\n{{< bar label="これまで" value="12" >}}\n{{< bar label="今回" value="3" >}}\n{{< /bars >}}',
     "まだできないこと・課題": "課題を箇条書き（2〜4個）で示し、それぞれ1〜2文で説明する。最後に、タネリスが今後に期待することを一言:\n"
                           '{{< tanerisu mood="puzzled" >}}ひとこと{{< /tanerisu >}}',
+    "これからどうなる？": "まず、論文自身が述べている今後の計画や応用の見込みを書く。そのあと、この研究が進むと社会や暮らしに何が起こりうるかを、"
+                        "論文の内容と区別して「一般に」「もし〜なら」の形で控えめに書く。最後に、タネリスが読者に一言:\n"
+                        "{{< tanerisu mood=\"happy\" >}}ひとこと{{< /tanerisu >}}",
     "クイズでチェック": "この記事の内容から、読者が答えられるクイズを2問、次の形だけで書く（ほかの文章は書かない。答えは記事と論文に書かれていることだけ）:\n"
                        '{{< quiz q="問題文" a="答えと1文の解説" >}}',
     "用語ミニ辞典": "この記事に出てきた専門用語を3〜5個、次の形だけで書く（ほかの文章は書かない）:\n"
@@ -503,7 +513,8 @@ class ContentPublisher(Strategy):
         return score, reasons
 
     def _paper_source(self, paper: Paper) -> str:
-        text = fetch_full_text(self.ctx.fetch, paper) if self.cfg.get("read_full_text", True) else ""
+        limit = int(self.cfg.get("full_text_chars", 20000))
+        text = fetch_full_text(self.ctx.fetch, paper, limit) if self.cfg.get("read_full_text", True) else ""
         authors = ", ".join(paper.authors[:5]) + (" ほか" if len(paper.authors) > 5 else "")
         return ("\n\n# 解説する論文\n"
                 f"論文タイトル: {paper.title}\n著者: {authors}\n公開日: {paper.published}\n"
@@ -523,16 +534,15 @@ class ContentPublisher(Strategy):
         if categories and category not in categories:
             category = str(self.cfg.get("default_category", categories[0]))
         points = plan.get("points") if isinstance(plan.get("points"), dict) else {}
-        min_chars = int(self.cfg.get("min_chars", 2500))
-        per_section = max(300, int((min_chars - 200) / len(PAPER_SECTIONS) * 1.15))
+        scale = int(self.cfg.get("min_chars", 5000)) / 5000
         parts: list[dict[str, Any]] = [
-            {"heading": None, "points": [str(plan.get("intro", "この研究のどこがおもしろいのか"))], "target": 200,
-             "style": PAPER_STYLES[None]}
+            {"heading": None, "points": [str(plan.get("intro", "この研究のどこがおもしろいのか"))],
+             "target": max(150, int(300 * scale)), "style": PAPER_STYLES[None]}
         ]
-        for heading in PAPER_SECTIONS:
+        for heading, weight in PAPER_SECTION_WEIGHTS.items():
             items = points.get(heading) or [f"論文の内容にもとづいて「{heading}」を説明する"]
-            parts.append({"heading": heading, "points": [str(x) for x in items], "target": per_section,
-                          "style": PAPER_STYLES[heading]})
+            parts.append({"heading": heading, "points": [str(x) for x in items],
+                          "target": max(150, int(weight * scale)), "style": PAPER_STYLES[heading]})
         return title, parts, category or None
 
     @staticmethod
