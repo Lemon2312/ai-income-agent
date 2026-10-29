@@ -2,7 +2,7 @@
 .hf {
   --f1: #e8590c; --f2: #1c7ed6; --f3: #2b8a3e; --f4: #ae3ec9;
   --hot: #e03131; --cool: #1971c2; --line: #9aa8a0;
-  margin: 28px 0; padding: 18px 16px 16px;
+  margin: 28px 0; padding: 18px 16px 16px; container-type: inline-size;
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
   box-shadow: var(--shadow);
 }
@@ -53,6 +53,16 @@
 .hf-verdict { margin: 12px 0 0; padding: 10px 12px; border-radius: 12px; background: var(--soft); font-size: .88rem; line-height: 1.7; }
 .hf-verdict b { color: var(--accent); }
 .hf-verdict.is-bad b { color: var(--hot); }
+/* Where the figure is wide enough (a PC), the buttons and results sit beside the drawing instead of under it,
+   so pressing them never pushes the drawing out of view, even in a short window. */
+.hf-side > :first-child { margin-top: 10px; }
+@container (min-width: 600px) {
+  .hf-stage { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 20px; align-items: center; }
+  .hf-side > :first-child { margin-top: 0; }
+  .hf-side .hf-tabs, .hf-side .hf-controls.is-grid { grid-template-columns: 1fr 1fr; }
+  .hf-side .hf-tabs { margin: 0; }
+  .hf-side .hf-readout { grid-template-columns: 1fr; }
+}
 /* The site's back-to-top button would cover the buttons and results of a figure. */
 .hf-in-view .to-top { opacity: 0; pointer-events: none; }
 @media (prefers-reduced-motion: reduce) {

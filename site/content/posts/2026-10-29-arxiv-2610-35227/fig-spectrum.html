@@ -1,22 +1,28 @@
 <figure class="hf" data-hf="spectrum">
   <p class="hf-title">周波数の間隔と「混信」</p>
   <p class="hf-lead">それぞれの命令は、ある周波数のまわりに少し広がっています。間隔をせまくすると、となりの命令がフィルターをすり抜けて混ざりこみます（赤い部分）。</p>
-  <svg viewBox="0 0 360 200" role="img" aria-label="3つの命令の周波数の広がりと、まん中の命令用のフィルター。間隔をせまくすると、となりの命令がフィルターの中に入りこむようすを示す図">
-    <rect class="js-band" y="38" height="132" fill="var(--f2)" fill-opacity=".08" stroke="var(--f2)" stroke-dasharray="4 3"/>
-    <text class="js-band-label t-small" x="180" y="30" text-anchor="middle">まん中の宛先のフィルター</text>
-    <g class="js-curves"></g>
-    <path class="js-leak" fill="var(--hot)" fill-opacity=".55" stroke="none"/>
-    <line x1="8" y1="170" x2="352" y2="170" stroke="var(--muted)" stroke-width="1.2"/>
-    <text x="352" y="190" text-anchor="end" class="t-small t-muted">周波数 →</text>
-  </svg>
-  <label class="hf-range"><span>周波数の間隔</span>
-    <input type="range" min="26" max="120" value="80" step="1">
-    <span class="hf-range-ends"><span>せまい</span><span>ひろい</span></span>
-  </label>
-  <div class="hf-controls">
-    <button class="hf-btn" type="button" data-len="short" aria-pressed="true">ゲート短め</button>
-    <button class="hf-btn" type="button" data-len="long" aria-pressed="false">ゲート長め</button>
+  <div class="hf-stage">
+    <div class="hf-draw">
+      <svg viewBox="0 0 360 200" role="img" aria-label="3つの命令の周波数の広がりと、まん中の命令用のフィルター。間隔をせまくすると、となりの命令がフィルターの中に入りこむようすを示す図">
+        <rect class="js-band" y="38" height="132" fill="var(--f2)" fill-opacity=".08" stroke="var(--f2)" stroke-dasharray="4 3"/>
+        <text class="js-band-label t-small" x="180" y="30" text-anchor="middle">まん中の宛先のフィルター</text>
+        <g class="js-curves"></g>
+        <path class="js-leak" fill="var(--hot)" fill-opacity=".55" stroke="none"/>
+        <line x1="8" y1="170" x2="352" y2="170" stroke="var(--muted)" stroke-width="1.2"/>
+        <text x="352" y="190" text-anchor="end" class="t-small t-muted">周波数 →</text>
+      </svg>
+    </div>
+    <div class="hf-side">
+    <label class="hf-range"><span>周波数の間隔</span>
+      <input type="range" min="26" max="120" value="80" step="1">
+      <span class="hf-range-ends"><span>せまい</span><span>ひろい</span></span>
+    </label>
+    <div class="hf-controls">
+      <button class="hf-btn" type="button" data-len="short" aria-pressed="true">ゲート短め</button>
+      <button class="hf-btn" type="button" data-len="long" aria-pressed="false">ゲート長め</button>
+    </div>
+    <p class="hf-status" aria-live="polite"></p>
+    </div>
   </div>
-  <p class="hf-status" aria-live="polite"></p>
   <p class="hf-note">イメージ図です（目盛りは実際の値ではありません）。ゲートの時間を長くすると、周波数の広がりがせまくなり、間隔を詰めやすくなります。論文の理想的な条件の計算でも、ゲートを長くして30MHz間隔を目安にしています。</p>
 </figure>

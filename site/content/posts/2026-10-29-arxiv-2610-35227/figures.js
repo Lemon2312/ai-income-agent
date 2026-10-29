@@ -420,7 +420,8 @@
   });
 
   // Shrinks each drawing so that it, the buttons and the result line fit on screen together below
-  // the sticky header: on a phone the buttons would otherwise push the top of the drawing out of view.
+  // the sticky header. When the buttons sit beside the drawing (a wide figure), only the taller of
+  // the two has to fit; when they sit under it (a phone), the drawing gets what the buttons leave.
   function height(el) {
     var s = getComputedStyle(el);
     return el.getBoundingClientRect().height + parseFloat(s.marginTop) + parseFloat(s.marginBottom);
@@ -429,13 +430,20 @@
     var header = document.querySelector(".site-header");
     var room = innerHeight - (header ? header.getBoundingClientRect().height : 0) - 28;
     roots.forEach(function (root) {
-      var drawing = $(root, "svg");
+      var drawing = $(root, "svg"), side = $(root, ".hf-side");
       if (!drawing) return;
+      drawing.style.maxHeight = "";
       var controls = 0;
-      [].forEach.call(root.children, function (el) {
-        if (el !== drawing && !el.matches(".hf-title, .hf-lead, .hf-note")) controls += height(el);
-      });
-      drawing.style.maxHeight = Math.max(180, room - controls) + "px";
+      if (side && side.getBoundingClientRect().top < drawing.getBoundingClientRect().bottom - 1) {
+        controls = 0; // beside the drawing
+      } else if (side) {
+        controls = height(side);
+      } else {
+        [].forEach.call(root.children, function (el) {
+          if (el !== drawing && !el.matches(".hf-title, .hf-lead, .hf-note")) controls += height(el);
+        });
+      }
+      drawing.style.maxHeight = Math.max(160, room - controls) + "px";
     });
   }
   var pending = 0;
