@@ -810,6 +810,12 @@ def test_block_components_get_their_own_lines():
     assert cleaned == "文章です。\n\n{{< tanerisu >}}やあ{{< /tanerisu >}}\n\n続き\n\n{{< ask >}}なぜ？{{< /ask >}}"
 
 
+def test_ask_keeps_only_the_moods_the_reader_character_has():
+    assert clean_shortcodes('{{< ask mood="surprised" >}}えっ{{< /ask >}}') == '{{< ask mood="surprised" >}}えっ{{< /ask >}}'
+    assert clean_shortcodes('{{< ask mood="angry" >}}えっ{{< /ask >}}') == "{{< ask >}}えっ{{< /ask >}}"
+    assert clean_shortcodes('{{< tanerisu mood="surprised" >}}やあ{{< /tanerisu >}}') == "{{< tanerisu >}}やあ{{< /tanerisu >}}"
+
+
 def test_plain_math_turns_latex_numbers_into_text():
     assert plain_math(r"誤り率は$(6.4\pm0.2)\times10^{-3}$です") == "誤り率は(6.4±0.2)×10⁻³です"
     assert plain_math(r"$XY(\pi/2)$ゲート、H$_2$O、10^{-4}") == "XY(π/2)ゲート、H₂O、10⁻⁴"
