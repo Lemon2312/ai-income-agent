@@ -108,8 +108,9 @@ PAPER_STYLES: dict[str | None, str] = {
                        "{{< summary >}}\nこの研究の成果を1〜2文で（数値は入れても1つまで）\n\n- ポイント1\n- ポイント2\n- ポイント3\n{{< /summary >}}",
     "なぜこの研究が必要？": "研究が解こうとしている問題を、裏返せるカードで示す（表は論文の言葉での説明、裏は身近なたとえ話。どちらも2文以内）:\n"
                          '{{< flip real="論文の言葉での説明" analogy="身近なたとえ話" >}}\n'
-                         "途中に、読者が抱きそうな疑問を1つ書き、すぐあとでタネリスが答える:\n"
-                         "{{< ask >}}読者の疑問{{< /ask >}}\n{{< tanerisu >}}答え{{< /tanerisu >}}",
+                         "途中に、このブログの運営者（この分野は専門外の大学生）が読者の代わりに抱きそうな疑問を1つ書き、すぐあとでタネリスが答える"
+                         "（驚いているなら mood=\"surprised\"、よく分からないなら mood=\"puzzled\" を付けてよい）:\n"
+                         "{{< ask >}}疑問{{< /ask >}}\n{{< tanerisu >}}答え{{< /tanerisu >}}",
     "何をしたの？": "研究でしたことを3〜5ステップの図にする（各ステップは20字以内）:\n"
                   '{{< flow "ステップ1" "ステップ2" "ステップ3" >}}\n'
                   "図のあとに、各ステップを1〜2文ずつ説明する。数値の詳しい説明は「何がすごいの？」で書くので、ここでは書かない。これまでの方法と比べられるなら、Markdownの表（項目／これまで／今回）を使ってよい",
@@ -194,8 +195,9 @@ def _shortcode_params(name: str, args: str) -> str | None:
         return None  # bar widths are computed from the number
     if name == "bar":
         named["value"] = named["value"].strip().replace(",", "")
-    allowed = {**fields, "tanerisu": ("mood", "side"), "bars": ("unit",)}.get(name, ())
-    if name == "tanerisu" and named.get("mood") not in (None, "", "happy", "puzzled"):
+    allowed = {**fields, "tanerisu": ("mood", "side"), "ask": ("mood",), "bars": ("unit",)}.get(name, ())
+    moods = {"tanerisu": ("happy", "puzzled"), "ask": ("puzzled", "surprised", "happy")}.get(name, ())
+    if named.get("mood") not in (None, "", *moods):
         named.pop("mood")
     return " ".join(f'{k}="{named[k].strip()}"' for k in allowed if named.get(k, "").strip())
 
