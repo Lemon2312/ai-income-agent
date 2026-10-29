@@ -1,12 +1,18 @@
 <figure class="hf" data-hf="fdm">
   <p class="hf-title">1本の線で、4つのゲートを同時に動かす</p>
   <p class="hf-lead">4つの命令（周波数のちがうマイクロ波）を1つの波にまとめて送り、フィルターでそれぞれの宛先に振り分けます。下のボタンで命令をオン・オフしてみてください。</p>
-  <svg viewBox="0 0 360 400" role="img" aria-label="4つの周波数の信号が1本の線にまとめられ、分配器と4つのフィルターを通って、それぞれのカプラーに届くようすを示すアニメーション">
-    <g class="js-static"></g>
-    <path class="js-sum" fill="none" stroke="var(--fg)" stroke-width="1.6" stroke-linejoin="round"/>
-    <g class="js-waves"></g>
-  </svg>
-  <div class="hf-controls js-toggles"></div>
-  <p class="hf-status" aria-live="polite"></p>
+  <div class="hf-stage">
+    <div class="hf-draw">
+      <svg viewBox="0 0 360 400" role="img" aria-label="4つの周波数の信号が1本の線にまとめられ、分配器と4つのフィルターを通って、それぞれのカプラーに届くようすを示すアニメーション">
+        <g class="js-static"></g>
+        <path class="js-sum" fill="none" stroke="var(--fg)" stroke-width="1.6" stroke-linejoin="round"/>
+        <g class="js-waves"></g>
+      </svg>
+    </div>
+    <div class="hf-side">
+    <div class="hf-controls is-grid js-toggles"></div>
+    <p class="hf-status" aria-live="polite"></p>
+    </div>
+  </div>
   <p class="hf-note">51・134・307・552MHzは、論文の実験でカプラー1〜4に送った2量子ビットゲートの信号の周波数です。波の形はイメージです。</p>
 </figure>

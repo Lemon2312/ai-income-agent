@@ -1,25 +1,31 @@
 <figure class="hf" data-hf="conditions">
   <p class="hf-title">4つの条件で、誤りが増えないかを確かめる</p>
   <p class="hf-lead">部品を1つずつ足しながら、ゲートの誤りを比べました。タブを切りかえると、送る波形とチップに届く波形がどう変わるかを見られます。</p>
-  <div class="hf-tabs" role="group" aria-label="実験の条件">
-    <button class="hf-btn" type="button" data-cond="1" aria-pressed="true"><b>①</b>もとの状態</button>
-    <button class="hf-btn" type="button" data-cond="2" aria-pressed="false"><b>②</b>フィルター</button>
-    <button class="hf-btn" type="button" data-cond="3" aria-pressed="false"><b>③</b>補正</button>
-    <button class="hf-btn" type="button" data-cond="4" aria-pressed="false"><b>④</b>周波数分割</button>
+  <div class="hf-stage">
+    <div class="hf-draw">
+      <svg viewBox="0 0 360 250" role="img" aria-label="信号の通り道に入れる部品と、送る波形・チップに届く波形の比較">
+        <circle class="js-runner" r="4" cy="34" fill="var(--accent)"/>
+        <g class="js-chain"></g>
+        <text x="12" y="88" class="t-small t-bold">送る波形</text>
+        <text x="188" y="88" class="t-small t-bold">チップに届く波形</text>
+        <rect x="8" y="96" width="166" height="140" rx="10" fill="var(--soft)"/>
+        <rect x="186" y="96" width="166" height="140" rx="10" fill="var(--soft)"/>
+        <path class="js-ideal-a" fill="none" stroke="var(--muted)" stroke-width="1.4" stroke-dasharray="4 3"/>
+        <path class="js-ideal-b" fill="none" stroke="var(--muted)" stroke-width="1.4" stroke-dasharray="4 3"/>
+        <path class="js-send" fill="none" stroke="var(--accent)" stroke-width="2.4" stroke-linejoin="round"/>
+        <path class="js-recv" fill="none" stroke="var(--accent)" stroke-width="2.4" stroke-linejoin="round"/>
+        <text x="350" y="248" text-anchor="end" class="t-small t-muted">点線＝本来ほしい波形</text>
+      </svg>
+    </div>
+    <div class="hf-side">
+    <div class="hf-tabs" role="group" aria-label="実験の条件">
+      <button class="hf-btn" type="button" data-cond="1" aria-pressed="true"><b>①</b>もとの状態</button>
+      <button class="hf-btn" type="button" data-cond="2" aria-pressed="false"><b>②</b>フィルター</button>
+      <button class="hf-btn" type="button" data-cond="3" aria-pressed="false"><b>③</b>補正</button>
+      <button class="hf-btn" type="button" data-cond="4" aria-pressed="false"><b>④</b>周波数分割</button>
+    </div>
+    <p class="hf-verdict" aria-live="polite"></p>
+    </div>
   </div>
-  <svg viewBox="0 0 360 250" role="img" aria-label="信号の通り道に入れる部品と、送る波形・チップに届く波形の比較">
-    <circle class="js-runner" r="4" cy="34" fill="var(--accent)"/>
-    <g class="js-chain"></g>
-    <text x="12" y="88" class="t-small t-bold">送る波形</text>
-    <text x="188" y="88" class="t-small t-bold">チップに届く波形</text>
-    <rect x="8" y="96" width="166" height="140" rx="10" fill="var(--soft)"/>
-    <rect x="186" y="96" width="166" height="140" rx="10" fill="var(--soft)"/>
-    <path class="js-ideal-a" fill="none" stroke="var(--muted)" stroke-width="1.4" stroke-dasharray="4 3"/>
-    <path class="js-ideal-b" fill="none" stroke="var(--muted)" stroke-width="1.4" stroke-dasharray="4 3"/>
-    <path class="js-send" fill="none" stroke="var(--accent)" stroke-width="2.4" stroke-linejoin="round"/>
-    <path class="js-recv" fill="none" stroke="var(--accent)" stroke-width="2.4" stroke-linejoin="round"/>
-    <text x="350" y="248" text-anchor="end" class="t-small t-muted">点線＝本来ほしい波形</text>
-  </svg>
-  <p class="hf-verdict" aria-live="polite"></p>
   <p class="hf-note">波形はイメージです。誤りの比べ方は論文の実験にもとづいています。</p>
 </figure>
