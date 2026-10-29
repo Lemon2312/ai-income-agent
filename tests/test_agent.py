@@ -290,7 +290,9 @@ def test_guidelines_reach_every_stage(tmp_path):
 def test_repo_agent_config_explains_quantum_papers():
     cfg = load_config(Path(__file__).resolve().parent.parent / "agent.toml")
     publisher = cfg.strategies["content_publisher"]
-    assert publisher["source"] == "arxiv"
+    # For now the blog writes the basics series; the paper settings stay for switching back.
+    assert publisher["source"] == "basics"
+    assert len(publisher["topics"]) >= 10 and publisher["category"] == publisher["series_name"]
     assert "量子コンピュータ" in publisher["niche"]
     assert "quant-ph" in publisher["arxiv_query"]
     assert publisher["recent_days"] <= 30 and publisher["news_feeds"]
@@ -299,7 +301,7 @@ def test_repo_agent_config_explains_quantum_papers():
     assert any("誇張しない" in g for g in publisher["guidelines"])
     categories = tomllib.loads((Path(__file__).resolve().parent.parent / "site" / "data" / "categories.toml")
                                .read_text(encoding="utf-8"))
-    assert "量子コンピュータ" in categories
+    assert "量子コンピュータ" in categories and publisher["category"] in categories
 
 
 class FixedScoresLLM(MockLLM):
@@ -834,3 +836,76 @@ def test_clean_shortcodes_checks_the_interactive_components():
     assert '{{< bar label="これまで" value="1200" >}}' in cleaned and "約3" not in cleaned
     assert '{{< bars unit="%" >}}' in cleaned and "{{< /bars >}}" in cleaned
     assert cleaned.count("{{< quiz") == 1
+
+
+# --- basics series -----------------------------------------------------------
+
+BASICS_TOPICS = '["量子ビットとは？", "測定すると何が起きる？"]'
+
+
+def basics_agent(tmp_path: Path, llm=None, topics: str = BASICS_TOPICS) -> Agent:
+    cfg_path = make_config(tmp_path, scout=False)
+    text = re.sub(r"^topics = \[.*?\]\n", "", cfg_path.read_text(encoding="utf-8"), count=1, flags=re.M | re.S)
+    text = text.replace(
+        "[strategies.content_publisher]\n",
+        f'[strategies.content_publisher]\nsource = "basics"\ntopics = {topics}\n'
+        'series_name = "量子コンピュータの基本"\ncategory = "量子コンピュータの基本"\n')
+    cfg_path.write_text(text, encoding="utf-8")
+    return Agent(load_config(cfg_path), llm=llm or MockLLM(), fetch=lambda url: RSS)
+
+
+def test_basics_series_is_written_in_order_with_the_visual_layout(tmp_path):
+    llm = RecordingLLM()
+    agent = basics_agent(tmp_path, llm=llm)
+    agent.run_once()
+    article = articles(agent)[0]
+    assert article.title == "量子ビットとは？"
+    draft = Path(article.payload["draft_path"])
+    assert draft.name.endswith("-quantum-basics-01.md")
+    text = draft.read_text(encoding="utf-8")
+    assert 'categories: ["量子コンピュータの基本"]' in text
+    headings = re.findall(r"^## (.+)$", text, flags=re.M)
+    assert headings == ["ひとことで言うと", "身近なものにたとえると", "しくみを見てみよう", "もう少しくわしく",
+                        "よくある誤解", "まとめ", "クイズでチェック", "用語ミニ辞典", "シリーズ「量子コンピュータの基本」について"]
+    assert "シリーズの第1回" in text
+
+    writes = {re.search(r"# 今回書くパート\n(.+)", u).group(1): u for s, u in llm.calls if "TASK: write_section" in s}
+    assert "{{< ask >}}" in writes["導入（最初の見出しの前に置く文章）"]
+    assert "{{< qubit" in writes["しくみを見てみよう"] and "{{< circuit" in writes["しくみを見てみよう"]
+    assert "{{< growth >}}" in writes["しくみを見てみよう"] and "{{< flow" in writes["しくみを見てみよう"]
+    assert 'front="よくある誤解"' in writes["よくある誤解"] and "{{< quiz" in writes["クイズでチェック"]
+    # Every prompt knows where the article sits in the series and what comes next.
+    for system, user in llm.calls:
+        if re.search(r"TASK: (outline_basics|write_section|review_article)", system):
+            assert "この記事は第1回" in user and "次に読む: 測定すると何が起きる？" in user
+    assert any("TASK: review_article" in s and "量子コンピュータの基本を解説する記事" in s for s, u in llm.calls)
+    assert not any("TASK: ideate_topics" in s for s, u in llm.calls)
+
+    agent.store.set_status(article.id, DONE)
+    agent.run_once()
+    second = articles(agent)[0]
+    assert second.title == "測定すると何が起きる？"
+    assert Path(second.payload["draft_path"]).name.endswith("-quantum-basics-02.md")
+
+
+def test_basics_series_stops_when_every_topic_is_written(tmp_path):
+    llm = RecordingLLM()
+    agent = basics_agent(tmp_path, llm=llm, topics='["量子ビットとは？"]')
+    agent.run_once()
+    agent.store.set_status(articles(agent)[0].id, DONE)
+    llm.calls.clear()
+    agent.run_once()
+    assert articles(agent) == [] and llm.calls == []
+
+
+def test_interactive_parts_keep_only_settings_the_site_can_run():
+    assert clean_shortcodes('{{< circuit qubits="2" gates="h 0;cnot 0 1; m" >}}') == \
+        '{{< circuit qubits="2" gates="H 0; CNOT 0 1; M" >}}'
+    for broken in ('qubits="4" gates="H 0"', 'qubits="2" gates="H 2"', 'qubits="2" gates="CNOT 1 1"',
+                   'qubits="1" gates="M; H 0"', 'qubits="1" gates="Y 0"', 'qubits="1" gates=""'):
+        assert clean_shortcodes(f"前{{{{< circuit {broken} >}}}}後") == "前後", broken
+    assert clean_shortcodes('{{< qubit theta="45" >}}') == '{{< qubit theta="45" >}}'
+    assert clean_shortcodes('{{< qubit theta="400" >}}') == "{{< qubit >}}"
+    assert clean_shortcodes("{{< growth >}}") == "{{< growth >}}"
+    flip = '{{< flip front="よくある誤解" real="a" back="本当は" analogy="b" >}}'
+    assert clean_shortcodes(flip) == flip

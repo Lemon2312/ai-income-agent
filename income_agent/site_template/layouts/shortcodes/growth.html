@@ -1,0 +1,12 @@
+{{- /* How many numbers it takes to write down the state of n qubits (2 to the n). Usage: {{< growth >}} */ -}}
+<figure class="qx qx-growth reveal">
+  <p class="qx-title">量子ビットを増やすと、どこまで増える？</p>
+  <div class="qx-stage">
+    <div class="qx-draw qx-cells" aria-hidden="true"></div>
+    <div class="qx-side">
+      <label class="qx-range"><span>量子ビットの数：<b class="js-n">3</b>個</span><input type="range" min="1" max="60" step="1" value="3"></label>
+      <div class="qx-readout"><span>状態を書き表すのに必要な数（2の<b class="js-n">3</b>乗）</span><b class="js-count">8</b><small class="js-approx"></small></div>
+      <p class="qx-note">ふつうのビット<b class="js-n">3</b>個が表せるのは、このパターンのどれか1つだけ。量子ビット<b class="js-n">3</b>個の状態は、全部のパターンそれぞれの「重み（振幅）」で書き表します。ただし、測定で取り出せるのは1つのパターンだけです。</p>
+    </div>
+  </div>
+</figure>

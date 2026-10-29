@@ -138,14 +138,35 @@ PAPER_STYLES: dict[str | None, str] = {
 # Shortcodes the site provides, and whether they wrap content. Anything else the LLM writes
 # (or a broken one) is removed, because an unknown or unclosed shortcode fails the whole Hugo build.
 SHORTCODES = {"summary": True, "stats": True, "ask": True, "tanerisu": True, "term": True, "bars": True,
-              "stat": False, "flow": False, "flip": False, "bar": False, "quiz": False}
+              "stat": False, "flow": False, "flip": False, "bar": False, "quiz": False,
+              "qubit": False, "circuit": False, "growth": False}
 _SHORTCODE = re.compile(r"\{\{[<%](.*?)[>%]\}\}")
 # "{{< flow "a" "b" }}": the closing ">" is the most common slip; Hugo fails the build on it.
 _MISSING_CLOSER = re.compile(r"\{\{([<%])([^{}\n]*?[^>%\s])\s*\}\}")
 _STRAY_DELIMITER = re.compile(r"\{\{[<%]|[>%]\}\}")
-_BLOCK_OPEN = re.compile(r"[ \t]*(\{\{< (?:summary|stats|bars|ask|tanerisu|term|flow|flip|quiz)\b)")
+_BLOCK_OPEN = re.compile(r"[ \t]*(\{\{< (?:summary|stats|bars|ask|tanerisu|term|flow|flip|quiz|qubit|circuit|growth)\b)")
 _BLOCK_CLOSE = re.compile(r"(\{\{< /(?:summary|stats|bars|ask|tanerisu|term) >\}\}"
-                          r"|\{\{< (?:flow|flip|quiz) [^\n]*?>\}\})[ \t]*")
+                          r"|\{\{< (?:flow|flip|quiz|qubit|circuit|growth)(?: [^\n]*?)? ?>\}\})[ \t]*")
+# A gate of {{< circuit >}}: one of the gates the site's simulator runs, on qubits numbered from 0.
+_GATE = re.compile(r"(H|X|Z) (\d)|CNOT (\d) (\d)|M")
+
+
+def _circuit_gates(qubits: str, gates: str) -> str | None:
+    """Canonical gate list for {{< circuit >}}, or None when the site's simulator can't run it:
+    1-3 qubits, at most 12 gates, indices in range, and M (measure all) only once, at the end."""
+    if not re.fullmatch(r"[1-3]", qubits.strip()):
+        return None
+    n = int(qubits)
+    out = []
+    for raw in [g.strip() for g in gates.split(";") if g.strip()]:
+        m = _GATE.fullmatch(re.sub(r"\s+", " ", raw.upper()))
+        if not m or (out and out[-1] == "M"):
+            return None
+        idx = [int(i) for i in m.groups()[1:] if i is not None]
+        if any(i >= n for i in idx) or (m.group(3) is not None and idx[0] == idx[1]):
+            return None
+        out.append(m.group(0))
+    return "; ".join(out) if 0 < len(out) <= 12 else None
 
 _SUPERSCRIPT = str.maketrans("0123456789-+", "⁰¹²³⁴⁵⁶⁷⁸⁹⁻⁺")
 _SUBSCRIPT = str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉")
@@ -186,6 +207,15 @@ def _shortcode_params(name: str, args: str) -> str | None:
     if re.sub(_NAMED, "", args).strip():
         return None
     named = dict(_NAMED.findall(args))
+    if name == "circuit":
+        gates = _circuit_gates(named.get("qubits", ""), named.get("gates", ""))
+        return None if gates is None else f'qubits="{named["qubits"].strip()}" gates="{gates}"'
+    if name == "qubit":
+        theta = named.get("theta", "").strip()
+        ok = re.fullmatch(r"\d{1,3}", theta) and int(theta) <= 180
+        return f'theta="{int(theta)}"' if ok else ""
+    if name == "growth":
+        return ""
     fields = {"stat": ("value", "label"), "term": ("name",), "flip": ("real", "analogy"),
               "bar": ("label", "value"), "quiz": ("q", "a")}
     required = fields.get(name, ())
@@ -195,7 +225,8 @@ def _shortcode_params(name: str, args: str) -> str | None:
         return None  # bar widths are computed from the number
     if name == "bar":
         named["value"] = named["value"].strip().replace(",", "")
-    allowed = {**fields, "tanerisu": ("mood", "side"), "ask": ("mood",), "bars": ("unit",)}.get(name, ())
+    allowed = {**fields, "flip": ("front", "real", "back", "analogy"), "tanerisu": ("mood", "side"), "ask": ("mood",),
+               "bars": ("unit",)}.get(name, ())
     moods = {"tanerisu": ("happy", "puzzled"), "ask": ("puzzled", "surprised", "happy")}.get(name, ())
     if named.get("mood") not in (None, "", *moods):
         named.pop("mood")
@@ -283,6 +314,104 @@ PAPER_OUTLINE_SYSTEM = f"""TASK: outline_paper
 必ず次のJSONのみを返してください:
 {{"title": "記事タイトル", "intro": "導入で伝えること", "category": "カテゴリ名", "points": {{"見出し": ["書く内容", ...], ...}}}}"""
 
+# "Basics" series: one fundamental idea per article, written in the order of the config's `topics`,
+# with the same visual parts as the paper articles plus interactive ones (qubit, circuit, growth).
+BASICS_SECTION_WEIGHTS = {"ひとことで言うと": 250, "身近なものにたとえると": 600, "しくみを見てみよう": 1000,
+                          "もう少しくわしく": 1100, "よくある誤解": 500, "まとめ": 350, "クイズでチェック": 250,
+                          "用語ミニ辞典": 400}
+BASICS_SECTIONS = list(BASICS_SECTION_WEIGHTS)
+
+BASICS_RULES = """- 書くのは、教科書や大学の講義で教えられている確立した内容だけ。研究中のことは「研究が進められている」と一般論で書く
+- 具体的な数値・年号・企業名・装置名・記録は書かない（2のn乗のように、理論から決まるものは書いてよい）
+- 「量子コンピュータは全部の答えを同時に計算する」「何でもすぐに速く解ける」のような誤解を招く言い方をしない。測定で取り出せる答えは1つで、速くなるのは特定の問題だけだと正しく書く
+- たとえ話は理解を助けるために使ってよいが、たとえがどこまで当てはまるか（どこが本物とちがうか）も添える
+- 専門用語には、出てきたその場でやさしい説明を添える
+- 1段落は2〜3文まで。長い説明を続けず、図・表・箇条書き・会話・動かせる部品で見せる
+- シリーズのこれまでの回で説明したことは、くわしく繰り返さず「第◯回で見たように」と短く触れる
+- 数式の記法（LaTeX の $…$、\\times、^{-3} など）は使わない。「2のn乗」「|0⟩」のように普通の文字で書く
+- {{< >}} の部品は、前後に空行を入れて独立した行に書く。閉じるときは必ず「>}}」で終える"""
+
+# The interactive parts, offered to the writer of 「しくみを見てみよう」 (and allowed anywhere).
+BASICS_INTERACTIVE = (
+    "記事のテーマに合う「動かせる部品」を1つ選んで置き、部品の前で、何を動かすと何が分かるかを1〜2文で案内する。"
+    "部品のあとで、読者が試すと見えること（確率や結果）を、部品の設定と食いちがわないように説明する:\n"
+    "- 1つの量子ビット・重ね合わせ・測定の話 → 矢印を傾けて0と1の確率を見て、測定を試せる部品:\n"
+    '{{< qubit theta="90" >}}\n'
+    "  （theta は最初の矢印の傾き。0〜180の数字。0なら必ず0、180なら必ず1、90なら半々）\n"
+    "- 量子ゲート・量子回路・量子もつれ・干渉の話 → 回路を1ステップずつ動かして確率の変化を見る部品:\n"
+    '{{< circuit qubits="2" gates="H 0; CNOT 0 1; M" >}}\n'
+    "  （qubits は1〜3。gates は「;」区切りで、使えるのは H 番号 / X 番号 / Z 番号 / CNOT 制御の番号 標的の番号 / M（全部を測定。最後に1回だけ）。"
+    "番号は0から。12個まで。例: 干渉なら gates=\"H 0; H 0; M\"、重ね合わせなら gates=\"H 0; M\"）\n"
+    "- 量子ビットの数と、状態を書き表すのに必要な数（2のn乗）の話 → 量子ビットの数を増やせる部品:\n"
+    "{{< growth >}}\n"
+    "どれも合わないときは、部品を使わずに手順の図と表で説明する")
+
+BASICS_STYLES: dict[str | None, str] = {
+    None: "まず、運営者のLK（量子コンピュータは専門外の大学生）が抱きそうな疑問を1つ書く:\n"
+          "{{< ask >}}LKの疑問{{< /ask >}}\n"
+          "続けて1〜2段落で読者の興味を引き、最後にタネリス（このブログのマスコット）がこの記事で分かることを一言で紹介する:\n"
+          "{{< tanerisu >}}ひとこと{{< /tanerisu >}}",
+    "ひとことで言うと": "次の形の要約ボックスだけを書く（ボックスの外に文章は書かない）:\n"
+                       "{{< summary >}}\nこの記事のテーマを1〜2文で\n\n- ポイント1\n- ポイント2\n- ポイント3\n{{< /summary >}}",
+    "身近なものにたとえると": "テーマを、裏返せるカードで示す（表は正確な説明、裏は身近なたとえ話。どちらも2文以内）:\n"
+                           '{{< flip front="正確にいうと" real="正確な説明" analogy="身近なたとえ話" >}}\n'
+                           "たとえ話がどこまで当てはまり、どこが本物とちがうかを書く。途中に、LKの疑問を1つ書き、すぐあとでタネリスが答える"
+                           "（驚いているなら mood=\"surprised\"、よく分からないなら mood=\"puzzled\" を付けてよい）:\n"
+                           "{{< ask >}}疑問{{< /ask >}}\n{{< tanerisu >}}答え{{< /tanerisu >}}",
+    "しくみを見てみよう": "しくみを3〜5ステップの図にする（各ステップは20字以内）:\n"
+                        '{{< flow "ステップ1" "ステップ2" "ステップ3" >}}\n'
+                        "図のあとに、各ステップを1〜2文ずつ説明する。\n" + BASICS_INTERACTIVE,
+    "もう少しくわしく": "「### 」の小見出しを2〜3個立て、しくみを一歩深く説明する。比べると分かりやすいものはMarkdownの表にしてよい。"
+                      "途中で読者がつまずきそうなところに、LKの疑問とタネリスの答えを1回だけ入れる:\n"
+                      '{{< ask mood="puzzled" >}}疑問{{< /ask >}}\n{{< tanerisu >}}答え{{< /tanerisu >}}',
+    "よくある誤解": "このテーマでよくある誤解を2〜3個、それぞれ次の裏返せるカードだけで示す（どちらも2文以内）:\n"
+                  '{{< flip front="よくある誤解" real="誤解の内容" back="本当は" analogy="正しい説明" >}}',
+    "まとめ": "要点を箇条書きで3つ。そのあと、「次に読む」に書かれた次の回のテーマに1文でつなぎ、最後にタネリスが一言:\n"
+             '{{< tanerisu mood="happy" >}}ひとこと{{< /tanerisu >}}',
+    "クイズでチェック": "この記事の内容から、読者が答えられるクイズを2〜3問、次の形だけで書く（ほかの文章は書かない。答えは記事に書いたことだけ）:\n"
+                       '{{< quiz q="問題文" a="答えと1文の解説" >}}',
+    "用語ミニ辞典": "この記事に出てきた専門用語を3〜5個、次の形だけで書く（ほかの文章は書かない）:\n"
+                  '{{< term name="用語" >}}中学生にもわかる1〜2文の説明{{< /term >}}',
+}
+
+BASICS_SECTION_SYSTEM = """TASK: write_section
+あなたは、量子コンピュータのしくみを専門知識のない読者にやさしく、楽しく解説するライターです。記事のうち、指定された1つのパートだけをMarkdownで書いてください。
+- 見出し（## ）は書かず、本文だけを出力する
+- 「表現のしかた」に書かれた {{< >}} の部品（要約ボックス・図・たとえカード・会話・動かせる部品・クイズ・用語カード）を、書かれた形のとおりに使う。部品の名前や書き方を変えない
+- 文章は短い段落で、話しかけるように書く。読者が「なるほど」と思えるように、身近な例から順に説明する"""
+
+BASICS_REVISE_SYSTEM = """TASK: revise_section
+あなたは編集長の指摘を反映して記事を改善するライターです。指定された1つのパートを書き直してください。
+- このパートに関係する指摘をすべて解消する。関係ない指摘は無視してよい
+- 見出し（## ）は書かず、本文だけを出力する
+- 「表現のしかた」に書かれた {{< >}} の部品は、書かれた形のとおりに残す"""
+
+BASICS_REVIEW_SYSTEM = """TASK: review_article
+あなたは、科学をやさしく紹介するメディアの編集長です。量子コンピュータの基本を解説する記事を次の5項目でそれぞれ1〜5点で採点してください（4点=そのまま公開できる水準）。
+- usefulness: 専門知識のない読者が、このテーマのしくみを理解できるか
+- accuracy: 物理として正しいか。「全部の答えを同時に計算する」「何でも速く解ける」のような誤解を招く説明や、根拠のない具体的な数値・年号・企業名があれば1〜2点
+- depth: たとえ話だけで終わらず、しくみを一歩深く説明しているか
+- readability: 短い段落・図・会話・動かせる部品などで読みやすく、同じ説明の繰り返しがないか
+- compliance: 誇張・断定や「執筆ルール」への違反がないか（あれば1点）
+注意:
+- 記事の中の {{< … >}} は、要約ボックス・図・たとえカード・会話・クイズ・用語カード・動かせる部品を表示する部品なので、中の文章を本文として評価する
+- {{< qubit theta="角度" >}} は矢印の傾き（0なら必ず0、90なら半々、180なら必ず1）、{{< circuit qubits="数" gates="…" >}} は書かれたゲートを順に実行する量子回路、{{< growth >}} は量子ビットの数と2のn乗を示す部品。本文の説明が部品の設定と食いちがっていたら accuracy で減点する
+- クイズの答えが記事の内容と合っているかも accuracy で確かめる
+- issues には、どの見出しをどう直すべきかを具体的に書く（4点以上の項目については書かなくてよい）
+必ず次のJSONのみを返してください:
+{"scores": {"usefulness": 1-5, "accuracy": 1-5, "depth": 1-5, "readability": 1-5, "compliance": 1-5},
+ "issues": ["「見出し名」: 改善点", ...], "description": "検索結果に表示する説明文（全角120字以内）"}"""
+
+BASICS_OUTLINE_SYSTEM = f"""TASK: outline_basics
+あなたは、量子コンピュータのしくみを1回1テーマでやさしく解説するシリーズの編集者です。指定されたテーマの回を企画してください。
+- intro: 記事の冒頭で読者の興味を引くために伝えること
+- points: 次の見出しごとに、書くべき具体的な内容を2〜4個
+  見出し: {"、".join(BASICS_SECTIONS)}
+- 「しくみを見てみよう」の points には、使う動かせる部品（qubit・circuit・growth のどれか、またはなし）と、その設定を1つ入れる
+{BASICS_RULES}
+必ず次のJSONのみを返してください:
+{{"intro": "導入で伝えること", "points": {{"見出し": ["書く内容", ...], ...}}}}"""
+
 
 def _slug(title: str) -> str:
     date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -340,7 +469,8 @@ def _pr_body(title: str, payload: dict[str, Any]) -> str:
 class ContentPublisher(Strategy):
     name = "content_publisher"
     description = "ジャンルに沿った記事を企画・執筆・品質チェックし、アフィリエイトリンク付きで公開する"
-    _source = ""  # the paper being explained, appended to every prompt while writing about it
+    _source = ""  # the paper being explained (or the series so far), appended to every prompt while writing
+    _mode = ""  # "paper" or "basics" while writing in that format; "" for the general how-to articles
 
     @property
     def drafts_dir(self) -> Path:
@@ -379,8 +509,11 @@ class ContentPublisher(Strategy):
             self.log.info("daily article limit reached; skipping")
             return []
         created: list[int] = []
-        if self.cfg.get("source", "topics") == "arxiv":
+        source = self.cfg.get("source", "topics")
+        if source == "arxiv":
             jobs = [(None, paper) for paper in self._next_papers(count)]
+        elif source == "basics":
+            jobs = [(title, None) for title in self._next_in_series(count)]
         else:
             jobs = [(title, None) for title in self._next_topics(count)]
         for title, paper in jobs:
@@ -415,6 +548,31 @@ class ContentPublisher(Strategy):
         ideas = [str(t).strip() for t in result.get("topics", []) if str(t).strip()]
         fresh = [t for t in ideas if t not in existing and t not in planned]
         return (planned + fresh)[:count]
+
+    def _next_in_series(self, count: int) -> list[str]:
+        """The next titles of the basics series, in the order of `topics`. Unlike the general
+        articles, nothing is made up once the list runs out: the series is written as planned."""
+        existing = set(self.ctx.store.titles(self.name, "article"))
+        attempts = int(self.cfg.get("max_attempts_per_topic", 2))
+        rejected = self.ctx.store.titles(self.name, "article_rejected", include_rejected=True)
+        existing |= {t for t in set(rejected) if rejected.count(t) >= attempts}
+        todo = [str(t) for t in self.cfg.get("topics", []) if str(t) not in existing]
+        if not todo:
+            self.log.info("every article of the basics series has been written; add titles to `topics` "
+                          "or set source = \"arxiv\" to go back to paper articles")
+        return todo[:count]
+
+    def _series_context(self, title: str) -> str:
+        topics = [str(t) for t in self.cfg.get("topics", [])]
+        number = topics.index(title) + 1 if title in topics else len(topics) + 1
+        earlier = "\n".join(f"- 第{i}回: {t}" for i, t in enumerate(topics[:number - 1], 1)) or "- （この回が最初）"
+        after = topics[number] if number < len(topics) else ""
+        return (f"\n\n# シリーズ「{self.cfg.get('series_name', '量子コンピュータの基本')}」\n"
+                f"この記事は第{number}回。これまでの回:\n{earlier}\n"
+                f"次に読む: {after or '（この回が最後）'}\n"
+                f"\n# 基本解説のルール（必ず守る）\n{BASICS_RULES}\n"
+                "\n# 採点するときの注意\n教科書的に確立していない主張、根拠のない具体的な数値・年号・企業名、"
+                "誤解を招く説明があれば、accuracy は1〜2点にする")
 
     def _paper_done(self, paper_id: str) -> bool:
         if self.ctx.store.is_seen(self.name, f"arxiv:{paper_id}"):
@@ -547,6 +705,31 @@ class ContentPublisher(Strategy):
                           "target": max(150, int(weight * scale)), "style": PAPER_STYLES[heading]})
         return title, parts, category or None
 
+    def _basics_outline(self, title: str) -> tuple[list[dict[str, Any]], str | None]:
+        plan = self.ctx.llm.complete_json(BASICS_OUTLINE_SYSTEM, self._brief(title), strategy=self.name)
+        points = plan.get("points") if isinstance(plan.get("points"), dict) else {}
+        scale = int(self.cfg.get("min_chars", 5000)) / 5000
+        parts: list[dict[str, Any]] = [
+            {"heading": None, "points": [str(plan.get("intro", "このテーマのどこがおもしろいのか"))],
+             "target": max(150, int(300 * scale)), "style": BASICS_STYLES[None]}
+        ]
+        for heading, weight in BASICS_SECTION_WEIGHTS.items():
+            items = points.get(heading) or [f"「{title}」について「{heading}」を説明する"]
+            parts.append({"heading": heading, "points": [str(x) for x in items],
+                          "target": max(150, int(weight * scale)), "style": BASICS_STYLES[heading]})
+        categories = self._categories()
+        category = str(self.cfg.get("category", "")) or (categories[0] if categories else "")
+        return parts, category or None
+
+    def _series_footer(self, title: str) -> str:
+        topics = [str(t) for t in self.cfg.get("topics", [])]
+        number = topics.index(title) + 1 if title in topics else None
+        name = self.cfg.get("series_name", "量子コンピュータの基本")
+        return (f"## シリーズ「{name}」について\n\n"
+                f"この記事は、量子コンピュータのしくみを1回1テーマで解説するシリーズ"
+                + (f"の第{number}回" if number else "") + "です。"
+                f"ほかの回は、カテゴリ「{self.cfg.get('category', name)}」から読めます。")
+
     @staticmethod
     def _paper_footer(paper: Paper) -> str:
         authors = ", ".join(paper.authors[:3]) + (" ほか" if len(paper.authors) > 3 else "")
@@ -621,10 +804,18 @@ class ContentPublisher(Strategy):
                 + (f"# 表現のしかた（必ず守る）\n{part['style']}\n\n" if part.get("style") else "")
                 + f"# 文字数\n{part['target']}字以上")
 
+    def _system(self, task: str) -> str:
+        """The prompt for `task` ("write", "revise" or "review") in the format being written."""
+        return {"paper": {"write": PAPER_SECTION_SYSTEM, "revise": PAPER_REVISE_SYSTEM, "review": PAPER_REVIEW_SYSTEM},
+                "basics": {"write": BASICS_SECTION_SYSTEM, "revise": BASICS_REVISE_SYSTEM,
+                           "review": BASICS_REVIEW_SYSTEM},
+                }.get(self._mode, {"write": SECTION_SYSTEM, "revise": REVISE_SECTION_SYSTEM,
+                                   "review": REVIEW_SYSTEM})[task]
+
     def _write_parts(self, title: str, parts: list[dict[str, Any]]) -> None:
         for part in parts:
             part["body"] = self.ctx.llm.complete(
-                PAPER_SECTION_SYSTEM if self._source else SECTION_SYSTEM,
+                self._system("write"),
                 self._part_prompt(title, parts, part), strategy=self.name,
                 max_tokens=min(4000, part["target"] * 2 + 500),
             ).text.strip()
@@ -637,7 +828,7 @@ class ContentPublisher(Strategy):
             current = _body_chars(part["body"])
             target = max(part["target"], current)
             revised = self.ctx.llm.complete(
-                PAPER_REVISE_SYSTEM if self._source else REVISE_SECTION_SYSTEM,
+                self._system("revise"),
                 f"{self._part_prompt(title, parts, {**part, 'target': target})}\n\n"
                 f"# 編集長の指摘（記事全体）\n{notes}\n\n# 現在の本文\n{part['body']}",
                 strategy=self.name, max_tokens=min(4000, target * 2 + 500),
@@ -657,7 +848,7 @@ class ContentPublisher(Strategy):
         min_chars = int(self.cfg.get("min_chars", 2500))
         chars = _body_chars(body)
         review = self.ctx.llm.complete_json(
-            PAPER_REVIEW_SYSTEM if self._source else REVIEW_SYSTEM, f"{self._brief(title)}\n文字数: {chars}字\n\n# 記事\n{body}",
+            self._system("review"), f"{self._brief(title)}\n文字数: {chars}字\n\n# 記事\n{body}",
             strategy=self.name,
         )
         scores = review.get("scores")
@@ -675,13 +866,14 @@ class ContentPublisher(Strategy):
                 "description": str(review.get("description", ""))}
 
     def _produce(self, title: str | None, paper: Paper | None = None) -> int | None:
-        if paper is None:
+        if paper is None and self.cfg.get("source") != "basics":
             return self._produce_article(str(title))
-        self._source = self._paper_source(paper)
+        self._mode = "paper" if paper else "basics"
+        self._source = self._paper_source(paper) if paper else self._series_context(str(title))
         try:
-            return self._produce_article(paper.title, paper)
+            return self._produce_article(paper.title if paper else str(title), paper)
         finally:
-            self._source = ""
+            self._source = self._mode = ""
 
     def _produce_article(self, title: str, paper: Paper | None = None) -> int | None:
         min_quality = float(self.cfg.get("min_quality", 0.8))
@@ -689,6 +881,8 @@ class ContentPublisher(Strategy):
 
         if paper:
             title, parts, category = self._paper_outline(paper)
+        elif self._mode == "basics":
+            parts, category = self._basics_outline(title)
         else:
             parts, category = self._outline(title)
         self._write_parts(title, parts)
@@ -703,9 +897,15 @@ class ContentPublisher(Strategy):
             review = self._review(title, body)
             history.append(review["score"])
 
+        slug = None
         if paper:
             body = body.rstrip() + "\n\n" + self._paper_footer(paper) + "\n"
-        slug = f"{datetime.now(timezone.utc):%Y-%m-%d}-arxiv-{re.sub(r'[^0-9a-z]+', '-', paper.id.lower())}" if paper else None
+            slug = f"{datetime.now(timezone.utc):%Y-%m-%d}-arxiv-{re.sub(r'[^0-9a-z]+', '-', paper.id.lower())}"
+        elif self._mode == "basics":
+            body = body.rstrip() + "\n\n" + self._series_footer(title) + "\n"
+            topics = [str(t) for t in self.cfg.get("topics", [])]
+            if title in topics:
+                slug = f"{datetime.now(timezone.utc):%Y-%m-%d}-quantum-basics-{topics.index(title) + 1:02d}"
         path = self._save_draft(title, body, review["description"], category, slug=slug)
         payload: dict[str, Any] = {"draft_path": str(path), "quality": review["score"],
                                    "quality_history": history, "scores": review["scores"],

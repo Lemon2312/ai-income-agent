@@ -123,6 +123,8 @@ class MockLLM:
             text = json.dumps({"title": "[mock] 論文をやさしく解説", "intro": "[mock] 導入",
                                "category": category.group(1) if category else "", "points": {}},
                               ensure_ascii=False)
+        elif name == "outline_basics":
+            text = json.dumps({"intro": "[mock] 導入", "points": {}}, ensure_ascii=False)
         elif name == "outline_article":
             category = re.search(r"# カテゴリ候補\n- (.+)", user)
             text = json.dumps({"intro": "[mock] 導入", "category": category.group(1) if category else "", "sections": [

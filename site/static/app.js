@@ -164,6 +164,228 @@
     }
   }
 
+  // Interactive parts for the basics articles: {{< qubit >}}, {{< circuit >}} and {{< growth >}}.
+  var SVG = "http://www.w3.org/2000/svg";
+  function svgEl(tag, attrs, parent) {
+    var e = document.createElementNS(SVG, tag);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function pct(p) {
+    p = Math.round(p * 1e6) / 1e6;
+    return (Math.round(p * 1000) / 10).toFixed(p > 0 && p < 1 ? 1 : 0) + "%";
+  }
+
+  // One qubit drawn as an arrow: straight up is |0⟩, straight down |1⟩; P(0) = cos²(θ/2).
+  document.querySelectorAll(".qx-qubit").forEach(function (fig) {
+    var range = fig.querySelector("input"), arrow = fig.querySelector(".qx-arrow"), tip = fig.querySelector(".qx-tip");
+    var status = fig.querySelector(".qx-status"), counts = [0, 0], snap = 0;
+    function draw(theta) {
+      var rad = theta * Math.PI / 180, x = 110 + 84 * Math.sin(rad), y = 112 - 84 * Math.cos(rad);
+      arrow.setAttribute("x2", x.toFixed(1)); arrow.setAttribute("y2", y.toFixed(1));
+      tip.setAttribute("cx", x.toFixed(1)); tip.setAttribute("cy", y.toFixed(1));
+    }
+    function p0() { var t = range.value * Math.PI / 360; return Math.cos(t) * Math.cos(t); }
+    function update() {
+      var p = p0();
+      fig.querySelector(".js-p0").textContent = pct(p);
+      fig.querySelector(".js-p1").textContent = pct(1 - p);
+      fig.querySelector(".js-b0").style.width = p * 100 + "%";
+      fig.querySelector(".js-b1").style.width = (1 - p) * 100 + "%";
+      clearTimeout(snap);
+      fig.classList.remove("is-collapsed");
+      draw(+range.value);
+    }
+    function tally(last) {
+      status.textContent = (last === undefined ? "" : "結果は " + last + "。") +
+        "これまで：0 が " + counts[0] + "回、1 が " + counts[1] + "回";
+    }
+    range.addEventListener("input", function () { counts = [0, 0]; update(); status.textContent = "矢印を傾けてから、測定してみよう"; });
+    fig.querySelector(".js-measure").addEventListener("click", function () {
+      var r = Math.random() < p0() ? 0 : 1;
+      counts[r]++;
+      tally(r);
+      // Measuring leaves the qubit in the state it showed; the arrow jumps there, then the same state is prepared again.
+      clearTimeout(snap);
+      fig.classList.add("is-collapsed");
+      draw(r ? 180 : 0);
+      snap = setTimeout(function () { fig.classList.remove("is-collapsed"); draw(+range.value); }, reduceMotion ? 0 : 900);
+    });
+    fig.querySelector(".js-many").addEventListener("click", function () {
+      var p = p0();
+      for (var i = 0; i < 100; i++) counts[Math.random() < p ? 0 : 1]++;
+      tally();
+    });
+    fig.querySelector(".js-reset").addEventListener("click", function () { counts = [0, 0]; tally(); });
+    update();
+  });
+
+  // 2 to the n, exactly (BigInt) and in Japanese units, with a cell per pattern while they still fit.
+  var UNITS = [["京", 16], ["兆", 12], ["億", 8], ["万", 4]];
+  document.querySelectorAll(".qx-growth").forEach(function (fig) {
+    var range = fig.querySelector("input"), cells = fig.querySelector(".qx-cells");
+    function update() {
+      var n = +range.value, count = window.BigInt ? BigInt(2) ** BigInt(n) : Math.pow(2, n);
+      fig.querySelectorAll(".js-n").forEach(function (b) { b.textContent = n; });
+      fig.querySelector(".js-count").textContent = count.toLocaleString("ja-JP") + " 個";
+      var approx = "", digits = count.toString().length;
+      for (var i = 0; i < UNITS.length; i++) {
+        if (digits > UNITS[i][1]) { approx = "約" + count.toString().slice(0, digits - UNITS[i][1]) + UNITS[i][0]; break; }
+      }
+      fig.querySelector(".js-approx").textContent = approx;
+      cells.textContent = "";
+      cells.className = "qx-draw qx-cells" + (n <= 4 ? " is-labeled" : n <= 8 ? "" : " is-many");
+      if (n > 8) {
+        cells.textContent = "パターンが多すぎて、マス目では描けません";
+        return;
+      }
+      var total = Math.pow(2, n);
+      cells.style.setProperty("--cols", Math.pow(2, Math.ceil(n / 2)));
+      for (var k = 0; k < total; k++) {
+        var c = document.createElement("span");
+        if (n <= 4) c.textContent = k.toString(2).padStart(n, "0");
+        c.style.setProperty("--d", Math.min(k * 12, 600) + "ms");
+        cells.appendChild(c);
+      }
+    }
+    range.addEventListener("input", update);
+    update();
+  });
+
+  // A state-vector simulator for 1-3 qubits and the real gates H, X, Z, CNOT; qubit 0 is the leftmost digit.
+  var GATE_TEXT = {
+    H: "H ゲート：量子ビット{0}を、0 と 1 が半々の重ね合わせにする（もう一度かけると元にもどる）",
+    X: "X ゲート：量子ビット{0}の 0 と 1 を入れかえる（ふつうの NOT と同じ）",
+    Z: "Z ゲート：量子ビット{0}が 1 の部分の符号を反転する（確率は変わらない）",
+    CNOT: "CNOT ゲート：量子ビット{0}が 1 のときだけ、量子ビット{1}を反転する",
+    M: "測定：確率にしたがって、どれか1つの結果が出る"
+  };
+  document.querySelectorAll(".qx-circuit").forEach(function (fig) {
+    var n = +fig.dataset.qubits, gates = fig.dataset.gates.split(";").map(function (g) { return g.trim().split(/\s+/); });
+    var dim = Math.pow(2, n), step = 0, counts = {};
+    var wires = fig.querySelector(".js-wires"), statesBox = fig.querySelector(".js-states");
+    var stepText = fig.querySelector(".qx-step"), status = fig.querySelector(".qx-status");
+    var measureRow = fig.querySelector(".js-measure-row");
+    function bit(i, q) { return (i >> (n - 1 - q)) & 1; }
+    function label(i) { return "|" + i.toString(2).padStart(n, "0") + "⟩"; }
+    function run(upto) {
+      var a = new Array(dim).fill(0);
+      a[0] = 1;
+      for (var s = 0; s < upto; s++) {
+        var g = gates[s], q = +g[1], b = new Array(dim).fill(0), i;
+        if (g[0] === "H") {
+          for (i = 0; i < dim; i++) {
+            var j = i ^ (1 << (n - 1 - q)), sign = bit(i, q) ? -1 : 1;
+            b[i] = (sign * a[i] + a[j]) / Math.SQRT2;
+          }
+        } else if (g[0] === "X") {
+          for (i = 0; i < dim; i++) b[i ^ (1 << (n - 1 - q))] = a[i];
+        } else if (g[0] === "Z") {
+          for (i = 0; i < dim; i++) b[i] = bit(i, q) ? -a[i] : a[i];
+        } else if (g[0] === "CNOT") {
+          var t = +g[2];
+          for (i = 0; i < dim; i++) b[bit(i, q) ? i ^ (1 << (n - 1 - t)) : i] = a[i];
+        } else {
+          b = a;
+        }
+        a = b;
+      }
+      return a.map(function (x) { return Math.abs(x) < 1e-12 ? 0 : x; });
+    }
+    // Draw the wires and gates once; columns light up as the steps are applied.
+    var colW = 46, left = 52, w = left + colW * gates.length + 16, rowH = 42, h = 18 + rowH * n;
+    wires.setAttribute("viewBox", "0 0 " + w + " " + h);
+    var cols = [];
+    for (var q = 0; q < n; q++) {
+      var y = 30 + rowH * q;
+      svgEl("line", { x1: 40, y1: y, x2: w - 8, y2: y, class: "qx-wire" }, wires);
+      svgEl("text", { x: 4, y: y + 4, class: "qx-small" }, wires).textContent = "q" + q + " |0⟩";
+    }
+    gates.forEach(function (g, s) {
+      var x = left + colW * s + colW / 2, col = svgEl("g", { class: "qx-col" }, wires);
+      svgEl("rect", { x: x - colW / 2 + 2, y: 6, width: colW - 4, height: h - 12, rx: 8, class: "qx-band" }, col);
+      function box(qq, text) {
+        var yy = 30 + rowH * qq;
+        svgEl("rect", { x: x - 14, y: yy - 14, width: 28, height: 28, rx: 6, class: "qx-gate" }, col);
+        svgEl("text", { x: x, y: yy + 5, class: "qx-gate-text" }, col).textContent = text;
+      }
+      if (g[0] === "CNOT") {
+        var yc = 30 + rowH * +g[1], yt = 30 + rowH * +g[2];
+        svgEl("line", { x1: x, y1: yc, x2: x, y2: yt, class: "qx-link" }, col);
+        svgEl("circle", { cx: x, cy: yc, r: 5, class: "qx-dot" }, col);
+        svgEl("circle", { cx: x, cy: yt, r: 11, class: "qx-target" }, col);
+        svgEl("path", { d: "M" + (x - 11) + " " + yt + "h22M" + x + " " + (yt - 11) + "v22", class: "qx-link" }, col);
+      } else if (g[0] === "M") {
+        for (var k = 0; k < n; k++) {
+          box(k, "");
+          var ym = 30 + rowH * k;
+          svgEl("path", { d: "M" + (x - 8) + " " + (ym + 5) + "a8 8 0 0 1 16 0M" + x + " " + (ym + 5) + "l5-9", class: "qx-meter" }, col);
+        }
+      } else {
+        box(+g[1], g[0]);
+      }
+      cols.push(col);
+    });
+    function show() {
+      var amps = run(step), measured = step === gates.length && gates[gates.length - 1][0] === "M";
+      cols.forEach(function (c, i) {
+        c.classList.toggle("is-done", i < step);
+        c.classList.toggle("is-current", i === step - 1);
+      });
+      var g = gates[step - 1];
+      stepText.textContent = step === 0 ? "スタート：すべての量子ビットが |0⟩"
+        : "ステップ" + step + "　" + GATE_TEXT[g[0]].replace("{0}", g[1]).replace("{1}", g[2]);
+      statesBox.textContent = "";
+      statesBox.classList.toggle("is-two-columns", dim > 4);
+      var negative = false;
+      amps.forEach(function (a, i) {
+        var p = a * a, row = document.createElement("div");
+        row.className = "qx-state" + (a < 0 ? " is-negative" : "") + (p === 0 ? " is-zero" : "");
+        row.innerHTML = '<span class="qx-ket"></span><i><s></s></i><b></b>';
+        row.querySelector(".qx-ket").textContent = (a < 0 ? "−" : "") + label(i);
+        row.querySelector("s").style.width = p * 100 + "%";
+        row.querySelector("b").textContent = pct(p);
+        if (a < 0) negative = true;
+        statesBox.appendChild(row);
+      });
+      if (negative) {
+        var note = document.createElement("p");
+        note.className = "qx-small-note";
+        note.textContent = "「−」は符号がマイナスの部分。確率は同じでも、次のゲートで打ち消し合ったり強め合ったりします";
+        statesBox.appendChild(note);
+      }
+      measureRow.hidden = !measured;
+      if (!measured) { counts = {}; status.textContent = ""; }
+      fig.querySelector(".js-back").disabled = step === 0;
+      fig.querySelector(".js-next").disabled = step === gates.length;
+    }
+    function sample(amps) {
+      var r = Math.random(), acc = 0;
+      for (var i = 0; i < dim; i++) { acc += amps[i] * amps[i]; if (r < acc) return i; }
+      return dim - 1;
+    }
+    function tally(last) {
+      var parts = [];
+      for (var i = 0; i < dim; i++) if (counts[i]) parts.push(label(i) + " " + counts[i] + "回");
+      status.textContent = (last === undefined ? "" : "結果は " + label(last) + "。") + "これまで：" + parts.join("・");
+    }
+    fig.querySelector(".js-next").addEventListener("click", function () { if (step < gates.length) { step++; show(); } });
+    fig.querySelector(".js-back").addEventListener("click", function () { if (step > 0) { step--; show(); } });
+    fig.querySelector(".js-reset").addEventListener("click", function () { step = 0; show(); });
+    fig.querySelector(".js-measure").addEventListener("click", function () {
+      var r = sample(run(step));
+      counts[r] = (counts[r] || 0) + 1;
+      tally(r);
+    });
+    fig.querySelector(".js-many").addEventListener("click", function () {
+      var amps = run(step);
+      for (var i = 0; i < 100; i++) { var r = sample(amps); counts[r] = (counts[r] || 0) + 1; }
+      tally();
+    });
+    show();
+  });
+
   var mascot = document.querySelector(".hero-mascot");
   if (mascot) {
     var messages = JSON.parse(mascot.dataset.messages || "[]");
