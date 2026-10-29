@@ -1,0 +1,31 @@
+<figure class="hf" data-hf="fridge">
+  <p class="hf-title">線が多いと、冷凍機の底まで熱が流れこむ</p>
+  <p class="hf-lead">量子ビットのチップは、冷凍機のいちばん冷たい段に置かれています。外からの線が増えるほど、線を伝って熱が入りこみます。ボタンで切りかえてみてください。</p>
+  <svg viewBox="0 0 360 300" role="img" aria-label="冷凍機の断面図。線が24本だと熱が多く流れこみ、周波数で束ねて2本にすると熱が減るようすを示すアニメーション">
+    <text x="4" y="14" class="t-small t-muted">室温の装置から</text>
+    <rect x="96" y="26" width="200" height="262" rx="16" fill="none" stroke="var(--border)" stroke-width="2"/>
+    <rect x="104" y="70" width="184" height="7" rx="3" class="box"/>
+    <rect x="104" y="115" width="184" height="7" rx="3" class="box"/>
+    <rect x="104" y="160" width="184" height="7" rx="3" class="box"/>
+    <rect x="104" y="205" width="184" height="8" rx="3" fill="var(--cool)" opacity=".45"/>
+    <text x="4" y="50" class="t-small t-muted">冷凍機</text>
+    <text x="4" y="206" class="t-small t-bold">最も冷たい段</text>
+    <text x="4" y="221" class="t-small t-muted">（約10mK）</text>
+    <text x="4" y="262" class="t-small t-muted">量子チップ</text>
+    <g class="js-lines"></g>
+    <g class="js-dots"></g>
+    <rect x="146" y="246" width="108" height="22" rx="4" fill="var(--surface)" stroke="var(--muted)" stroke-width="1.2"/>
+    <g class="js-qubits"></g>
+    <text x="325" y="50" text-anchor="middle" class="t-small t-bold">入る熱</text>
+    <rect x="314" y="60" width="22" height="170" rx="11" fill="var(--soft)" stroke="var(--border)"/>
+    <rect class="js-meter" x="316" y="228" width="18" height="0" rx="9" fill="var(--hot)"/>
+    <line x1="308" y1="162" x2="342" y2="162" stroke="var(--fg)" stroke-width="1.5" stroke-dasharray="4 3"/>
+    <text transform="translate(354 145) rotate(-90)" text-anchor="middle" class="t-small t-muted">点線＝冷やせる量</text>
+  </svg>
+  <div class="hf-controls">
+    <button class="hf-btn" type="button" data-mode="dedicated" aria-pressed="true">専用線（量子ビット8個×3本）</button>
+    <button class="hf-btn" type="button" data-mode="mux" aria-pressed="false">周波数で束ねる</button>
+  </div>
+  <p class="hf-status" aria-live="polite"></p>
+  <p class="hf-note">イメージ図です。本数は説明用で、実際の装置の数ではありません。論文によると、今の先端的な装置は量子ビット1個あたり約3本の線を使っています。24本→2本は、論文が今のゲートの性能で見積もった「12分の1」にあたります。</p>
+</figure>

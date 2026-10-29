@@ -1,0 +1,6 @@
+{{- /* Hand-made HTML figure kept next to the article in its page bundle. Usage: {{< htmlfig "fdm" >}} inlines fig-fdm.html;
+       figures.css and figures.js from the same bundle are linked with it (figures.js runs once however many figures there are). */ -}}
+{{- $p := .Page -}}
+{{- with $p.Resources.Get "figures.css" }}<link rel="stylesheet" href="{{ .RelPermalink }}">{{ end -}}
+{{- with $p.Resources.Get "figures.js" }}<script src="{{ .RelPermalink }}" defer></script>{{ end -}}
+{{- with $p.Resources.Get (printf "fig-%s.html" (.Get 0)) }}{{ .Content | safeHTML }}{{ else }}{{ errorf "htmlfig: fig-%s.html is not in the bundle of %s" ($.Get 0) $p.File.Path }}{{ end -}}
