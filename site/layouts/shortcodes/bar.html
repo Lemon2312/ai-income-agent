@@ -1,0 +1,3 @@
+{{- /* One bar inside {{< bars >}}; widths are scaled to the largest value in the chart. */ -}}
+{{- $unit := "" }}{{ with .Parent }}{{ $unit = .Get "unit" | default "" }}{{ end -}}
+<div class="bar" data-value="{{ .Get "value" }}"><span class="bar-label">{{ .Get "label" | .Page.RenderString }}</span><span class="bar-track"><span class="bar-fill"></span></span><span class="bar-value">{{ .Get "value" }}{{ $unit }}</span></div>

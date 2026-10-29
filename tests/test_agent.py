@@ -626,8 +626,9 @@ def test_listed_paper_becomes_an_article_with_its_source(tmp_path):
     assert "arxiv-2408-13687" in draft.name
     text = draft.read_text(encoding="utf-8")
     headings = re.findall(r"^## (.+)$", text, flags=re.M)
-    assert headings == ["ひとことで言うと", "なぜこの研究が必要？", "何をしたの？", "何がすごいの？",
-                        "まだできないこと・課題", "用語ミニ辞典", "元の論文"]
+    assert headings == ["ひとことで言うと", "なぜこの研究が必要？", "何をしたの？", "しくみをもう少しくわしく",
+                        "何がすごいの？", "まだできないこと・課題", "これからどうなる？", "クイズでチェック",
+                        "用語ミニ辞典", "元の論文"]
     assert "[arXiv:2408.13687](https://arxiv.org/abs/2408.13687)" in text
     # Every writing and review prompt carries the abstract and the full-text excerpt.
     for system, user in llm.calls:
@@ -687,10 +688,15 @@ def test_paper_parts_ask_for_components_and_see_earlier_parts(tmp_path):
     llm = RecordingLLM()
     paper_agent(tmp_path, llm=llm).run_once()
     writes = [u for s, u in llm.calls if "TASK: write_section" in s]
-    assert len(writes) == 7
+    assert len(writes) == 10
+    targets = {re.search(r"# 今回書くパート\n(.+)", u).group(1): int(re.search(r"# 文字数\n(\d+)", u).group(1))
+               for u in writes}
+    assert targets["しくみをもう少しくわしく"] > targets["何をしたの？"] > targets["用語ミニ辞典"]
     by_part = {re.search(r"# 今回書くパート\n(.+)", u).group(1): u for u in writes}
     assert "{{< flow" in by_part["何をしたの？"] and "{{< stat " in by_part["何がすごいの？"]
     assert "{{< term" in by_part["用語ミニ辞典"] and "{{< summary >}}" in by_part["ひとことで言うと"]
+    assert "{{< flip" in by_part["なぜこの研究が必要？"] and "{{< bars" in by_part["何がすごいの？"]
+    assert "{{< quiz" in by_part["クイズでチェック"]
     assert "ここまでに書いた内容" not in writes[0]
     assert "## ひとことで言うと" in by_part["何をしたの？"]  # earlier parts are shown to avoid repeats
     assert any("TASK: review_article" in s and "論文解説の記事" in s for s, u in llm.calls)
@@ -807,3 +813,17 @@ def test_plain_math_turns_latex_numbers_into_text():
     assert plain_math(r"誤り率は$(6.4\pm0.2)\times10^{-3}$です") == "誤り率は(6.4±0.2)×10⁻³です"
     assert plain_math(r"$XY(\pi/2)$ゲート、H$_2$O、10^{-4}") == "XY(π/2)ゲート、H₂O、10⁻⁴"
     assert plain_math("料金は1ドル、変数xは2") == "料金は1ドル、変数xは2"
+
+
+def test_clean_shortcodes_checks_the_interactive_components():
+    text = (
+        '{{< flip real="配線が多すぎる" analogy="渋滞した交差点" >}}\n'
+        '{{< flip real="片方だけ" >}}\n'
+        '{{< bars unit="%" >}}{{< bar label="これまで" value="1,200" >}}{{< bar label="今回" value="約3" >}}{{< /bars >}}\n'
+        '{{< quiz q="何を減らした？" a="制御ラインの数です。" >}}{{< quiz q="答えなし" >}}'
+    )
+    cleaned = clean_shortcodes(text)
+    assert '{{< flip real="配線が多すぎる" analogy="渋滞した交差点" >}}' in cleaned and "片方だけ" not in cleaned
+    assert '{{< bar label="これまで" value="1200" >}}' in cleaned and "約3" not in cleaned
+    assert '{{< bars unit="%" >}}' in cleaned and "{{< /bars >}}" in cleaned
+    assert cleaned.count("{{< quiz") == 1

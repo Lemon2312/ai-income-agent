@@ -83,8 +83,11 @@ TOP_VENUES = re.compile(r"\b(Nature|Science|Physical Review Letters|PRL|PRX|Phys
                         r"Nature Communications|Science Advances|npj Quantum)\b", re.I)
 EXPERIMENTAL = re.compile(r"\b(experiment\w*|demonstrat\w*|realiz\w*|implement\w*|processor|hardware|device)\b", re.I)
 
-PAPER_SECTIONS = ["ひとことで言うと", "なぜこの研究が必要？", "何をしたの？", "何がすごいの？",
-                  "まだできないこと・課題", "用語ミニ辞典"]
+# Each section's share of the article (characters at min_chars = 5000); the core sections get the most room.
+PAPER_SECTION_WEIGHTS = {"ひとことで言うと": 250, "なぜこの研究が必要？": 700, "何をしたの？": 700,
+                         "しくみをもう少しくわしく": 1200, "何がすごいの？": 700, "まだできないこと・課題": 600,
+                         "これからどうなる？": 500, "クイズでチェック": 250, "用語ミニ辞典": 400}
+PAPER_SECTIONS = list(PAPER_SECTION_WEIGHTS)
 
 PAPER_RULES = """- 論文の成果・数値・主張は、下の「論文の要旨」と「論文本文の抜粋」に書かれているものだけを使う。書かれていない結果や数値を作らない
 - 数値を書くときは、何の数値か（どの条件・どの装置・どの単位か）を論文どおり正確に書く。別の条件の数値と取り違えない
@@ -103,31 +106,45 @@ PAPER_STYLES: dict[str | None, str] = {
           "{{< tanerisu >}}ひとこと{{< /tanerisu >}}",
     "ひとことで言うと": "次の形の要約ボックスだけを書く（ボックスの外に文章は書かない）:\n"
                        "{{< summary >}}\nこの研究の成果を1〜2文で（数値は入れても1つまで）\n\n- ポイント1\n- ポイント2\n- ポイント3\n{{< /summary >}}",
-    "なぜこの研究が必要？": "身近なたとえ話を1つ使う。途中に、読者が抱きそうな疑問を1つ書き、すぐあとでタネリスが答える:\n"
+    "なぜこの研究が必要？": "研究が解こうとしている問題を、裏返せるカードで示す（表は論文の言葉での説明、裏は身近なたとえ話。どちらも2文以内）:\n"
+                         '{{< flip real="論文の言葉での説明" analogy="身近なたとえ話" >}}\n'
+                         "途中に、読者が抱きそうな疑問を1つ書き、すぐあとでタネリスが答える:\n"
                          "{{< ask >}}読者の疑問{{< /ask >}}\n{{< tanerisu >}}答え{{< /tanerisu >}}",
     "何をしたの？": "研究でしたことを3〜5ステップの図にする（各ステップは20字以内）:\n"
                   '{{< flow "ステップ1" "ステップ2" "ステップ3" >}}\n'
                   "図のあとに、各ステップを1〜2文ずつ説明する。数値の詳しい説明は「何がすごいの？」で書くので、ここでは書かない。これまでの方法と比べられるなら、Markdownの表（項目／これまで／今回）を使ってよい",
+    "しくみをもう少しくわしく": "「### 」の小見出しを2〜3個立て、論文本文の抜粋にもとづいて、研究の方法・実験の条件や装置・うまくいった工夫を順に掘り下げる。"
+                              "各小見出しには、この論文ならではの具体的な内容を入れる（一般論で埋めない）。"
+                              "比べると分かりやすいものはMarkdownの表にしてよい。途中で読者がつまずきそうなところに、タネリスの一言を1回だけ入れる:\n"
+                              "{{< tanerisu >}}ひとこと{{< /tanerisu >}}",
     "何がすごいの？": "論文の要旨・本文の抜粋にそのまま書かれている数値を2〜4個選び、数字カードにする:\n"
                     '{{< stats >}}\n{{< stat value="2.4倍" label="何の数値か（条件も正確に）" >}}\n{{< /stats >}}\n'
                     "value は数値から始める（例: 2.4倍、0.143%、101個）。論文にない数値や、自分で計算した数値は使わない。"
-                    "使える数値がなければ数字カードは使わず、これまでとの違いを表で示す。カードのあとで、それぞれの数値の意味を説明する",
+                    "使える数値がなければ数字カードは使わず、これまでとの違いを表で示す。カードのあとで、それぞれの数値の意味を説明する。\n"
+                    "論文に「これまで」と「今回」など比べられる数値が両方書かれているときだけ、棒グラフも使う（同じ単位の数値だけ。value は数字のみ）:\n"
+                    '{{< bars unit="%" >}}\n{{< bar label="これまで" value="12" >}}\n{{< bar label="今回" value="3" >}}\n{{< /bars >}}',
     "まだできないこと・課題": "課題を箇条書き（2〜4個）で示し、それぞれ1〜2文で説明する。最後に、タネリスが今後に期待することを一言:\n"
                           '{{< tanerisu mood="puzzled" >}}ひとこと{{< /tanerisu >}}',
+    "これからどうなる？": "まず、論文自身が述べている今後の計画や応用の見込みを書く。そのあと、この研究が進むと社会や暮らしに何が起こりうるかを、"
+                        "論文の内容と区別して「一般に」「もし〜なら」の形で控えめに書く。最後に、タネリスが読者に一言:\n"
+                        "{{< tanerisu mood=\"happy\" >}}ひとこと{{< /tanerisu >}}",
+    "クイズでチェック": "この記事の内容から、読者が答えられるクイズを2問、次の形だけで書く（ほかの文章は書かない。答えは記事と論文に書かれていることだけ）:\n"
+                       '{{< quiz q="問題文" a="答えと1文の解説" >}}',
     "用語ミニ辞典": "この記事に出てきた専門用語を3〜5個、次の形だけで書く（ほかの文章は書かない）:\n"
                   '{{< term name="用語" >}}中学生にもわかる1〜2文の説明{{< /term >}}',
 }
 
 # Shortcodes the site provides, and whether they wrap content. Anything else the LLM writes
 # (or a broken one) is removed, because an unknown or unclosed shortcode fails the whole Hugo build.
-SHORTCODES = {"summary": True, "stats": True, "ask": True, "tanerisu": True, "term": True,
-              "stat": False, "flow": False}
+SHORTCODES = {"summary": True, "stats": True, "ask": True, "tanerisu": True, "term": True, "bars": True,
+              "stat": False, "flow": False, "flip": False, "bar": False, "quiz": False}
 _SHORTCODE = re.compile(r"\{\{[<%](.*?)[>%]\}\}")
 # "{{< flow "a" "b" }}": the closing ">" is the most common slip; Hugo fails the build on it.
 _MISSING_CLOSER = re.compile(r"\{\{([<%])([^{}\n]*?[^>%\s])\s*\}\}")
 _STRAY_DELIMITER = re.compile(r"\{\{[<%]|[>%]\}\}")
-_BLOCK_OPEN = re.compile(r"[ \t]*(\{\{< (?:summary|stats|ask|tanerisu|term|flow)\b)")
-_BLOCK_CLOSE = re.compile(r"(\{\{< /(?:summary|stats|ask|tanerisu|term) >\}\}|\{\{< flow [^\n]*?>\}\})[ \t]*")
+_BLOCK_OPEN = re.compile(r"[ \t]*(\{\{< (?:summary|stats|bars|ask|tanerisu|term|flow|flip|quiz)\b)")
+_BLOCK_CLOSE = re.compile(r"(\{\{< /(?:summary|stats|bars|ask|tanerisu|term) >\}\}"
+                          r"|\{\{< (?:flow|flip|quiz) [^\n]*?>\}\})[ \t]*")
 
 _SUPERSCRIPT = str.maketrans("0123456789-+", "⁰¹²³⁴⁵⁶⁷⁸⁹⁻⁺")
 _SUBSCRIPT = str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉")
@@ -168,10 +185,16 @@ def _shortcode_params(name: str, args: str) -> str | None:
     if re.sub(_NAMED, "", args).strip():
         return None
     named = dict(_NAMED.findall(args))
-    required = {"stat": ("value", "label"), "term": ("name",)}.get(name, ())
+    fields = {"stat": ("value", "label"), "term": ("name",), "flip": ("real", "analogy"),
+              "bar": ("label", "value"), "quiz": ("q", "a")}
+    required = fields.get(name, ())
     if any(not named.get(k, "").strip() for k in required):
         return None
-    allowed = {"stat": ("value", "label"), "term": ("name",), "tanerisu": ("mood", "side")}.get(name, ())
+    if name == "bar" and not re.fullmatch(r"\d+(\.\d+)?", named["value"].strip().replace(",", "")):
+        return None  # bar widths are computed from the number
+    if name == "bar":
+        named["value"] = named["value"].strip().replace(",", "")
+    allowed = {**fields, "tanerisu": ("mood", "side"), "bars": ("unit",)}.get(name, ())
     if name == "tanerisu" and named.get("mood") not in (None, "", "happy", "puzzled"):
         named.pop("mood")
     return " ".join(f'{k}="{named[k].strip()}"' for k in allowed if named.get(k, "").strip())
@@ -223,7 +246,7 @@ def clean_shortcodes(markdown: str) -> str:
 PAPER_SECTION_SYSTEM = """TASK: write_section
 あなたは、研究論文を専門知識のない読者にやさしく、楽しく解説するライターです。記事のうち、指定された1つのパートだけをMarkdownで書いてください。
 - 見出し（## ）は書かず、本文だけを出力する
-- 「表現のしかた」に書かれた {{< >}} の部品（要約ボックス・図・数字カード・会話・用語カード）を、書かれた形のとおりに使う。部品の名前や書き方を変えない
+- 「表現のしかた」に書かれた {{< >}} の部品（要約ボックス・図・数字カード・棒グラフ・たとえカード・会話・クイズ・用語カード）を、書かれた形のとおりに使う。部品の名前や書き方を変えない
 - 文章は短い段落で、話しかけるように書く。読者がワクワクするように、何が新しいのかをはっきり伝える"""
 
 PAPER_REVISE_SYSTEM = """TASK: revise_section
@@ -240,7 +263,8 @@ PAPER_REVIEW_SYSTEM = """TASK: review_article
 - readability: 短い段落・図・数字カード・会話などで読みやすく、同じ説明の繰り返しがないか
 - compliance: 誇張・断定や「執筆ルール」への違反がないか（あれば1点）
 注意:
-- 記事の中の {{< … >}} は、要約ボックス・図・数字カード・会話・用語カードを表示する部品なので、中の文章を本文として評価する
+- 記事の中の {{< … >}} は、要約ボックス・図・数字カード・棒グラフ・たとえカード・会話・クイズ・用語カードを表示する部品なので、中の文章を本文として評価する
+- クイズの答えが記事や論文の内容と合っているかも accuracy で確かめる
 - issues には、どの見出しをどう直すべきかを具体的に書く（4点以上の項目については書かなくてよい）
 必ず次のJSONのみを返してください:
 {"scores": {"usefulness": 1-5, "accuracy": 1-5, "depth": 1-5, "readability": 1-5, "compliance": 1-5},
@@ -489,7 +513,8 @@ class ContentPublisher(Strategy):
         return score, reasons
 
     def _paper_source(self, paper: Paper) -> str:
-        text = fetch_full_text(self.ctx.fetch, paper) if self.cfg.get("read_full_text", True) else ""
+        limit = int(self.cfg.get("full_text_chars", 20000))
+        text = fetch_full_text(self.ctx.fetch, paper, limit) if self.cfg.get("read_full_text", True) else ""
         authors = ", ".join(paper.authors[:5]) + (" ほか" if len(paper.authors) > 5 else "")
         return ("\n\n# 解説する論文\n"
                 f"論文タイトル: {paper.title}\n著者: {authors}\n公開日: {paper.published}\n"
@@ -509,16 +534,15 @@ class ContentPublisher(Strategy):
         if categories and category not in categories:
             category = str(self.cfg.get("default_category", categories[0]))
         points = plan.get("points") if isinstance(plan.get("points"), dict) else {}
-        min_chars = int(self.cfg.get("min_chars", 2500))
-        per_section = max(300, int((min_chars - 200) / len(PAPER_SECTIONS) * 1.15))
+        scale = int(self.cfg.get("min_chars", 5000)) / 5000
         parts: list[dict[str, Any]] = [
-            {"heading": None, "points": [str(plan.get("intro", "この研究のどこがおもしろいのか"))], "target": 200,
-             "style": PAPER_STYLES[None]}
+            {"heading": None, "points": [str(plan.get("intro", "この研究のどこがおもしろいのか"))],
+             "target": max(150, int(300 * scale)), "style": PAPER_STYLES[None]}
         ]
-        for heading in PAPER_SECTIONS:
+        for heading, weight in PAPER_SECTION_WEIGHTS.items():
             items = points.get(heading) or [f"論文の内容にもとづいて「{heading}」を説明する"]
-            parts.append({"heading": heading, "points": [str(x) for x in items], "target": per_section,
-                          "style": PAPER_STYLES[heading]})
+            parts.append({"heading": heading, "points": [str(x) for x in items],
+                          "target": max(150, int(weight * scale)), "style": PAPER_STYLES[heading]})
         return title, parts, category or None
 
     @staticmethod

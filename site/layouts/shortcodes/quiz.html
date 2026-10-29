@@ -1,0 +1,5 @@
+{{- /* Quiz that opens to show its answer. Usage: {{< quiz q="問題" a="答えと短い解説" >}} */ -}}
+<details class="quiz reveal">
+  <summary><span class="quiz-tag">Q</span><span class="quiz-q">{{ .Get "q" | .Page.RenderString }}</span><span class="quiz-open">答えを見る</span></summary>
+  <div class="quiz-a"><span class="quiz-tag is-answer">A</span><span>{{ .Get "a" | .Page.RenderString }}</span></div>
+</details>
