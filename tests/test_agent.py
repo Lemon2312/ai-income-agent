@@ -391,7 +391,8 @@ def test_repo_site_theme_matches_template():
             if src.is_file():
                 assert src.read_bytes() == (root / "site" / src.relative_to(template)).read_bytes(), src
     categories = (root / "site" / "data" / "categories.toml").read_text(encoding="utf-8")
-    for post in (root / "site" / "content" / "posts").glob("2*.md"):
+    posts = root / "site" / "content" / "posts"
+    for post in [*posts.glob("2*.md"), *posts.glob("2*/index.md")]:
         match = re.search(r'^categories: \["(.+?)"\]', post.read_text(encoding="utf-8"), flags=re.M)
         assert match and f'["{match.group(1)}"]' in categories, post
 

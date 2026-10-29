@@ -1,0 +1,21 @@
+<figure class="hf" data-hf="pulse">
+  <p class="hf-title">「周波数の目印」があるかないか</p>
+  <p class="hf-lead">フィルターは周波数を見て信号を振り分けます。周波数の目印がない信号は、どこへ送ればよいか区別できません。</p>
+  <svg viewBox="0 0 360 250" role="img" aria-label="上はこれまでの一方向のパルスで周波数の目印がない。下は今回のマイクロ波で、134MHzという目印があり、カプラー2へ届けられることを示すアニメーション">
+    <text x="6" y="18" class="t-bold">これまで：一方向のパルス</text>
+    <line x1="6" y1="94" x2="250" y2="94" class="wire" stroke-dasharray="3 3"/>
+    <path class="js-pulse" fill="none" stroke="var(--muted)" stroke-width="2.4" stroke-linejoin="round"/>
+    <rect class="js-box1" x="262" y="44" width="92" height="60" rx="10" fill="var(--surface)" stroke="var(--border)" stroke-width="1.5"/>
+    <text x="308" y="64" text-anchor="middle" class="t-small t-muted">周波数の目印</text>
+    <text x="308" y="81" text-anchor="middle" class="t-bold" fill="var(--hot)" style="fill: var(--hot)">なし</text>
+    <text x="308" y="97" text-anchor="middle" class="t-small t-muted">→ 行き先不明</text>
+    <text x="6" y="146" class="t-bold">今回：マイクロ波</text>
+    <line x1="6" y1="210" x2="250" y2="210" class="wire" stroke-dasharray="3 3"/>
+    <path class="js-wave" fill="none" stroke="var(--f2)" stroke-width="2" stroke-linejoin="round"/>
+    <rect class="js-box2" x="262" y="164" width="92" height="64" rx="10" fill="var(--surface)" stroke="var(--border)" stroke-width="1.5"/>
+    <text x="308" y="184" text-anchor="middle" class="t-small t-muted">周波数の目印</text>
+    <text x="308" y="202" text-anchor="middle" class="t-bold" style="fill: var(--f2)">134MHz</text>
+    <text x="308" y="219" text-anchor="middle" class="t-small t-muted">→ カプラー2へ</text>
+  </svg>
+  <p class="hf-note">波の形はイメージです。134MHzは、論文の実験でカプラー2に送った2量子ビットゲートの信号の周波数です。</p>
+</figure>
