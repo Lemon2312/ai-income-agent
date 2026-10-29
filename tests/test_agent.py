@@ -183,6 +183,23 @@ def test_auto_publish_respects_daily_limit(tmp_path):
     assert len(list(posts_dir(tmp_path).glob("*.md"))) == 2
 
 
+def test_manual_runs_ignore_and_do_not_use_the_daily_limit(tmp_path):
+    cfg = load_config(make_config(tmp_path, scout=False, require_approval="false", max_articles_per_day="1"))
+    scheduled = Agent(cfg, llm=MockLLM(), fetch=lambda url: RSS)
+    manual = Agent(cfg, llm=MockLLM(), fetch=lambda url: RSS, store=scheduled.store, manual=True)
+    scheduled.run_once()
+    scheduled.run_once()
+    assert len(articles(scheduled, DONE)) == 1  # the schedule stops at the limit
+    manual.run_once()
+    manual.run_once()
+    assert len(articles(scheduled, DONE)) == 3  # a manual run still writes one each time
+    assert sum(1 for a in articles(scheduled, DONE) if a.payload.get("manual")) == 2
+    scheduled.store.conn.execute("DELETE FROM actions WHERE payload NOT LIKE '%manual%'")
+    scheduled.store.conn.commit()
+    scheduled.run_once()  # manual articles don't use up the schedule's quota
+    assert len(articles(scheduled, DONE)) == 3
+
+
 def test_quality_gate_revises_until_good_enough(tmp_path):
     llm = ScriptedReviewLLM([0.5, 0.6, 0.9])
     agent = make_agent(tmp_path, llm=llm, scout=False)

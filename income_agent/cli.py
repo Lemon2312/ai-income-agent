@@ -20,7 +20,7 @@ def _agent(args: argparse.Namespace) -> Agent:
     if not path.exists():
         sys.exit(f"{path} が見つかりません。先に `income-agent init` を実行してください。")
     try:
-        return Agent(load_config(path))
+        return Agent(load_config(path), manual=getattr(args, "manual", False))
     except ValueError as e:
         sys.exit(f"設定エラー: {e}")
 
@@ -188,6 +188,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("run", help="エージェントを実行（デフォルトは常駐ループ）")
     s.add_argument("--once", action="store_true", help="1サイクルだけ実行して終了")
+    s.add_argument("--manual", action="store_true",
+                   help="手動実行として扱う（1日の記事数の上限を無視し、作った記事は上限に数えない）")
     s.set_defaults(func=cmd_run)
 
     s = sub.add_parser("queue", help="承認キューを表示")
