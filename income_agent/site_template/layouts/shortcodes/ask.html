@@ -1,9 +1,9 @@
-{{- /* A reader's question, asked by the student Haru and usually answered by {{< tanerisu >}} right after.
+{{- /* A reader's question, asked by the author as a university student and usually answered by {{< tanerisu >}} right after.
        Usage: {{< ask >}}質問{{< /ask >}} or {{< ask mood="surprised" >}}…{{< /ask >}} (mood: puzzled | surprised | happy). */ -}}
 <aside class="mascot-say is-right ask-say">
   {{ partial "reader.html" (dict "mood" (.Get "mood") "class" "mascot-say-mascot") }}
   <div class="mascot-say-bubble">
-    <span class="mascot-say-name">{{ site.Params.readerName | default "ハル" }}</span>
+    <span class="mascot-say-name">{{ site.Params.readerName | default site.Params.author }}</span>
     {{ .Inner | .Page.RenderString (dict "display" "block") }}
   </div>
 </aside>
