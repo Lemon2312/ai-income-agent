@@ -20,7 +20,7 @@ from income_agent.feeds import parse_feed
 from income_agent.llm import LLMResponse, MockLLM, parse_json
 from income_agent.site import init_site
 from income_agent.storage import DONE, PENDING, REJECTED
-from income_agent.strategies.content_publisher import clean_shortcodes, insert_affiliate_links
+from income_agent.strategies.content_publisher import clean_shortcodes, insert_affiliate_links, plain_math
 from income_agent.strategies.freelance_scout import _contains
 
 RSS = b"""<?xml version="1.0"?>
@@ -789,3 +789,21 @@ def test_arxiv_requests_wait_and_retry_when_busy(monkeypatch):
     with pytest.raises(urllib.error.HTTPError):
         fetch_papers(lambda url: (_ for _ in ()).throw(urllib.error.HTTPError(url, 429, "busy", {}, None)),
                      ["2408.13687"])
+
+
+def test_clean_shortcodes_repairs_a_missing_closer_and_drops_stray_delimiters():
+    text = '{{< flow "a" "b" }}\n本文 {{< と >}} の間'
+    cleaned = clean_shortcodes(text)
+    assert cleaned.startswith('{{< flow "a" "b" >}}')
+    assert cleaned.count("{{<") == 1 and cleaned.count(">}}") == 1
+
+
+def test_block_components_get_their_own_lines():
+    cleaned = clean_shortcodes("文章です。{{< tanerisu >}}やあ{{< /tanerisu >}}続き{{< ask >}}なぜ？{{< /ask >}}")
+    assert cleaned == "文章です。\n\n{{< tanerisu >}}やあ{{< /tanerisu >}}\n\n続き\n\n{{< ask >}}なぜ？{{< /ask >}}"
+
+
+def test_plain_math_turns_latex_numbers_into_text():
+    assert plain_math(r"誤り率は$(6.4\pm0.2)\times10^{-3}$です") == "誤り率は(6.4±0.2)×10⁻³です"
+    assert plain_math(r"$XY(\pi/2)$ゲート、H$_2$O、10^{-4}") == "XY(π/2)ゲート、H₂O、10⁻⁴"
+    assert plain_math("料金は1ドル、変数xは2") == "料金は1ドル、変数xは2"

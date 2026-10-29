@@ -92,7 +92,9 @@ PAPER_RULES = """- 論文の成果・数値・主張は、下の「論文の要�
 - 成果を誇張しない。論文自身が述べている限界や、まだできないことも書く
 - 専門用語には、出てきたその場でやさしい説明を添える
 - 1段落は2〜3文まで。長い説明を続けず、図・表・箇条書き・会話の部品で見せる
-- 前のパートで説明したこと（量子ビットとは何か、など）を繰り返さない
+- 前のパートで説明したこと（量子ビットとは何か、など）を繰り返さない。成果の数値の詳しい説明は「何がすごいの？」にまとめ、ほかのパートで何度も書かない
+- 数式の記法（LaTeX の $…$、\\times、^{-3} など）は使わない。数値は「6.4×10⁻³」「0.64%」のように普通の文字で書く
+- {{< >}} の部品は、前後に空行を入れて独立した行に書く。閉じるときは必ず「>}}」で終える
 - 論文の文章を長く引用・翻訳しない。自分の言葉で説明する"""
 
 # How each part is shown. The {{< >}} parts are Hugo shortcodes in the site's layouts/shortcodes.
@@ -100,12 +102,12 @@ PAPER_STYLES: dict[str | None, str] = {
     None: "1〜2段落で読者の興味を引く。最後に、タネリス（このブログのマスコット）がこの記事で分かることを一言で紹介する:\n"
           "{{< tanerisu >}}ひとこと{{< /tanerisu >}}",
     "ひとことで言うと": "次の形の要約ボックスだけを書く（ボックスの外に文章は書かない）:\n"
-                       "{{< summary >}}\nこの研究の成果を1〜2文で（数値があれば入れる）\n\n- ポイント1\n- ポイント2\n- ポイント3\n{{< /summary >}}",
+                       "{{< summary >}}\nこの研究の成果を1〜2文で（数値は入れても1つまで）\n\n- ポイント1\n- ポイント2\n- ポイント3\n{{< /summary >}}",
     "なぜこの研究が必要？": "身近なたとえ話を1つ使う。途中に、読者が抱きそうな疑問を1つ書き、すぐあとでタネリスが答える:\n"
                          "{{< ask >}}読者の疑問{{< /ask >}}\n{{< tanerisu >}}答え{{< /tanerisu >}}",
     "何をしたの？": "研究でしたことを3〜5ステップの図にする（各ステップは20字以内）:\n"
                   '{{< flow "ステップ1" "ステップ2" "ステップ3" >}}\n'
-                  "図のあとに、各ステップを1〜2文ずつ説明する。これまでの方法と比べられるなら、Markdownの表（項目／これまで／今回）を使ってよい",
+                  "図のあとに、各ステップを1〜2文ずつ説明する。数値の詳しい説明は「何がすごいの？」で書くので、ここでは書かない。これまでの方法と比べられるなら、Markdownの表（項目／これまで／今回）を使ってよい",
     "何がすごいの？": "論文の要旨・本文の抜粋にそのまま書かれている数値を2〜4個選び、数字カードにする:\n"
                     '{{< stats >}}\n{{< stat value="2.4倍" label="何の数値か（条件も正確に）" >}}\n{{< /stats >}}\n'
                     "value は数値から始める（例: 2.4倍、0.143%、101個）。論文にない数値や、自分で計算した数値は使わない。"
@@ -121,6 +123,37 @@ PAPER_STYLES: dict[str | None, str] = {
 SHORTCODES = {"summary": True, "stats": True, "ask": True, "tanerisu": True, "term": True,
               "stat": False, "flow": False}
 _SHORTCODE = re.compile(r"\{\{[<%](.*?)[>%]\}\}")
+# "{{< flow "a" "b" }}": the closing ">" is the most common slip; Hugo fails the build on it.
+_MISSING_CLOSER = re.compile(r"\{\{([<%])([^{}\n]*?[^>%\s])\s*\}\}")
+_STRAY_DELIMITER = re.compile(r"\{\{[<%]|[>%]\}\}")
+_BLOCK_OPEN = re.compile(r"[ \t]*(\{\{< (?:summary|stats|ask|tanerisu|term|flow)\b)")
+_BLOCK_CLOSE = re.compile(r"(\{\{< /(?:summary|stats|ask|tanerisu|term) >\}\}|\{\{< flow [^\n]*?>\}\})[ \t]*")
+
+_SUPERSCRIPT = str.maketrans("0123456789-+", "⁰¹²³⁴⁵⁶⁷⁸⁹⁻⁺")
+_SUBSCRIPT = str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉")
+_TEX_SYMBOLS = {r"\times": "×", r"\pm": "±", r"\approx": "≈", r"\sim": "〜", r"\cdot": "·", r"\leq": "≤",
+                r"\geq": "≥", r"\le": "≤", r"\ge": "≥", r"\%": "%", r"\mu": "μ", r"\pi": "π", r"\alpha": "α",
+                r"\beta": "β", r"\gamma": "γ", r"\Lambda": "Λ", r"\lambda": "λ", r"\psi": "ψ", r"\to": "→"}
+
+
+def plain_math(text: str) -> str:
+    """Turns the simple LaTeX the LLM writes for numbers ($(6.4\\pm0.2)\\times10^{-3}$) into plain
+    characters (6.4±0.2)×10⁻³, because the site doesn't render math."""
+    def convert(expr: str) -> str:
+        expr = re.sub(r"\\(?:text|mathrm|mathbf)\{([^{}]*)\}", r"\1", expr)
+        for tex, char in _TEX_SYMBOLS.items():
+            expr = re.sub(re.escape(tex) + r"(?![A-Za-z])", char, expr)
+        expr = re.sub(r"\^\{([-+0-9]+)\}|\^([-+]?[0-9])", lambda m: (m[1] or m[2]).translate(_SUPERSCRIPT), expr)
+        expr = re.sub(r"_\{([0-9]+)\}|_([0-9])", lambda m: (m[1] or m[2]).translate(_SUBSCRIPT), expr)
+        return expr.replace("{", "").replace("}", "").replace("\\", "")
+
+    text = re.sub(r"\$([^$\n]{1,120})\$", lambda m: convert(m[1]), text)
+    text = re.sub(r"\\\((.{1,120}?)\\\)", lambda m: convert(m[1]), text)
+    text = re.sub(r"(\d)\^\{([-+0-9]+)\}|(\d)\^([-+]?[0-9]+)",
+                  lambda m: (m[1] or m[3]) + (m[2] or m[4]).translate(_SUPERSCRIPT), text)
+    for tex in (r"\times", r"\pm"):
+        text = re.sub(re.escape(tex) + r"(?![A-Za-z])", _TEX_SYMBOLS[tex], text)
+    return text
 _NAMED = re.compile(r'(\w+)="([^"]*)"')
 
 
@@ -146,7 +179,9 @@ def _shortcode_params(name: str, args: str) -> str | None:
 
 def clean_shortcodes(markdown: str) -> str:
     """Keeps only well-formed uses of the site's shortcodes. Unknown, malformed or
-    unbalanced tags are dropped and the text inside them is kept."""
+    unbalanced tags are dropped and the text inside them is kept. Block components are
+    put on lines of their own so they never end up inside a paragraph."""
+    markdown = _MISSING_CLOSER.sub(lambda m: f"{{{{{m[1]}{m[2]} {'>' if m[1] == '<' else '%'}}}}}", markdown)
     tokens = []  # (start, end, replacement or None, name, kind)
     for m in _SHORTCODE.finditer(markdown):
         inner = re.match(r"\s*(/?)\s*([\w-]+)(.*)$", m.group(1), flags=re.S)
@@ -177,11 +212,13 @@ def clean_shortcodes(markdown: str) -> str:
         tok[2] = None
     out, pos = [], 0
     for start, end, text, *_ in tokens:
-        out.append(markdown[pos:start])
+        out.append(_STRAY_DELIMITER.sub("", markdown[pos:start]))
         out.append(text or "")
         pos = end
-    out.append(markdown[pos:])
-    return "".join(out)
+    out.append(_STRAY_DELIMITER.sub("", markdown[pos:]))
+    text = _BLOCK_OPEN.sub(r"\n\n\1", "".join(out))
+    text = _BLOCK_CLOSE.sub(r"\1\n\n", text)
+    return re.sub(r"\n{3,}", "\n\n", text).strip()
 
 PAPER_SECTION_SYSTEM = """TASK: write_section
 あなたは、研究論文を専門知識のない読者にやさしく、楽しく解説するライターです。記事のうち、指定された1つのパートだけをMarkdownで書いてください。
@@ -586,7 +623,7 @@ class ContentPublisher(Strategy):
     def _assemble(title: str, parts: list[dict[str, Any]]) -> str:
         out = [f"# {title}"]
         for part in parts:
-            body = clean_shortcodes(re.sub(r"\A##\s+.*\n+", "", part["body"].strip()))
+            body = clean_shortcodes(plain_math(re.sub(r"\A##\s+.*\n+", "", part["body"].strip())))
             out.append(body if part["heading"] is None else f"## {part['heading']}\n\n{body}")
         return "\n\n".join(out) + "\n"
 
