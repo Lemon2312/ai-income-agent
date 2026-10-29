@@ -22,7 +22,7 @@
 
 ## GitHub だけで始める（PC・サーバー不要）
 
-このリポジトリには、ブログ本体（`site/`）と、GitHub Actions で毎日9時台・18時台（日本時間）に記事を書く仕組みが入っています（**現在は自動実行を一時停止中**。再開するには `.github/workflows/blog-agent.yml` の `schedule` のコメントを外します）。設定はブラウザだけで完了します。
+このリポジトリには、ブログ本体（`site/`）と、GitHub Actions で毎日9時台・18時台（日本時間）に記事を書く仕組みが入っています（一時停止するには `.github/workflows/blog-agent.yml` の `schedule` の3行をコメントにします）。設定はブラウザだけで完了します。
 
 1. **APIキーを登録**: リポジトリの Settings → Secrets and variables → Actions → New repository secret で、名前 `OPENAI_API_KEY`、値に OpenAI のAPIキーを登録
 2. **Pages を有効化**: Settings → Pages → Build and deployment の Source を「GitHub Actions」に変更
