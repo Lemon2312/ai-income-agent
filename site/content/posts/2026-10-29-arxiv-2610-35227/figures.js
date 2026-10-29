@@ -225,7 +225,8 @@
       var b = document.createElement("button");
       b.type = "button";
       b.className = "hf-btn";
-      b.textContent = "グループ" + n;
+      b.textContent = n;
+      b.setAttribute("aria-label", "グループ" + n);
       b.dataset.g = k;
       buttonsBox.appendChild(b);
     });
@@ -254,7 +255,7 @@
     });
     function setPlay(p) {
       playing = p;
-      play.textContent = p ? "❚❚ 止める" : "▶ 自動で切りかえ";
+      play.textContent = p ? "❚❚ 止める" : "▶ 自動";
       play.setAttribute("aria-pressed", p ? "true" : "false");
     }
     play.addEventListener("click", function () {
@@ -403,7 +404,7 @@
       marker.style.transform = "translate(" + xOf(heat).toFixed(1) + "px, 0)";
       marker.setAttribute("fill", ok ? "var(--accent)" : "var(--hot)");
       marker.setAttribute("stroke", ok ? "var(--accent)" : "var(--hot)");
-      status.textContent = ok ? "冷凍機が冷やせる範囲（5〜30μW）に収まる" : "冷凍機が冷やせる量（5〜30μW）を超えてしまう";
+      status.textContent = ok ? "冷やせる範囲（5〜30μW）に収まる" : "冷やせる量（5〜30μW）を超える";
       status.style.color = ok ? "var(--accent)" : "var(--hot)";
       press(buttons, function (b) { return +b.dataset.r === r; });
     }
@@ -412,8 +413,41 @@
     update();
   };
 
-  document.querySelectorAll("[data-hf]").forEach(function (root) {
+  var roots = document.querySelectorAll("[data-hf]");
+  roots.forEach(function (root) {
     var draw = figs[root.dataset.hf];
     if (draw) draw(root);
   });
+
+  // Shrinks each drawing so that it, the buttons and the result line fit on screen together below
+  // the sticky header: on a phone the buttons would otherwise push the top of the drawing out of view.
+  function height(el) {
+    var s = getComputedStyle(el);
+    return el.getBoundingClientRect().height + parseFloat(s.marginTop) + parseFloat(s.marginBottom);
+  }
+  function fit() {
+    var header = document.querySelector(".site-header");
+    var room = innerHeight - (header ? header.getBoundingClientRect().height : 0) - 28;
+    roots.forEach(function (root) {
+      var drawing = $(root, "svg");
+      if (!drawing) return;
+      var controls = 0;
+      [].forEach.call(root.children, function (el) {
+        if (el !== drawing && !el.matches(".hf-title, .hf-lead, .hf-note")) controls += height(el);
+      });
+      drawing.style.maxHeight = Math.max(180, room - controls) + "px";
+    });
+  }
+  var pending = 0;
+  addEventListener("resize", function () { cancelAnimationFrame(pending); pending = requestAnimationFrame(fit); });
+  fit();
+
+  if ("IntersectionObserver" in window) {
+    var inView = new Set();
+    var seen = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { if (e.isIntersecting) inView.add(e.target); else inView.delete(e.target); });
+      document.body.classList.toggle("hf-in-view", inView.size > 0);
+    });
+    roots.forEach(function (root) { seen.observe(root); });
+  }
 })();

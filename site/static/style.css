@@ -457,7 +457,15 @@ html:not(.js) .to-top { display: none; }
   .post-header-body { padding: 18px 20px 20px; }
   .prev-next { grid-template-columns: 1fr; }
   .pn-next { grid-column: auto; }
-  .site-nav { gap: 4px 10px; }
+  /* One row of links next to the theme toggle, so the sticky header stays two lines tall on a phone. */
+  .site-header-inner { padding: 8px 16px; gap: 2px 12px; }
+  .site-nav { gap: 4px 10px; flex-wrap: nowrap; }
+  .site-nav a { font-size: .8rem; white-space: nowrap; }
+  .theme-toggle { flex: none; width: 32px; height: 32px; }
+}
+@media (max-width: 360px) {
+  .site-nav { gap: 4px 8px; }
+  .site-nav a { font-size: .74rem; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }

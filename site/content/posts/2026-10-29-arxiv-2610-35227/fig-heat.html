@@ -14,17 +14,16 @@
   </svg>
   <label class="hf-range"><span>制御ラインを <b class="js-r">1</b>分の1 に減らす</span>
     <input type="range" min="1" max="60" value="1" step="1">
-    <span class="hf-range-ends"><span>そのまま</span><span>60分の1</span></span>
   </label>
   <div class="hf-controls">
     <button class="hf-btn" type="button" data-r="1" aria-pressed="true">専用線</button>
-    <button class="hf-btn" type="button" data-r="12" aria-pressed="false">12分の1（今の性能）</button>
-    <button class="hf-btn" type="button" data-r="48" aria-pressed="false">48分の1（理想的な条件）</button>
+    <button class="hf-btn" type="button" data-r="12" aria-pressed="false">12分の1（今）</button>
+    <button class="hf-btn" type="button" data-r="48" aria-pressed="false">48分の1（理想）</button>
   </div>
   <div class="hf-readout">
     <div><span>制御ラインの本数</span><b class="js-lines"></b></div>
     <div><span>最も冷たい段に入る熱</span><b class="js-heat"></b></div>
   </div>
   <p class="hf-status" aria-live="polite"></p>
-  <p class="hf-note">論文の見積もりの前提：量子ビット38万1000個、1個あたり3本の線（専用線なら114万3000本）、線1本あたり350pW（市販の配線の公表値）。12分の1と48分の1の本数は論文の値です。</p>
+  <p class="hf-note">論文の見積もりの前提：量子ビット38万1000個、1個あたり3本の線（専用線なら114万3000本）、線1本あたり350pW（市販の配線の公表値）。12分の1は今のゲートの性能、48分の1は理想的な条件での論文の見積もりで、本数も論文の値です。</p>
 </figure>
