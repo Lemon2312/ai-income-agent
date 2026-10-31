@@ -516,6 +516,7 @@ class ContentPublisher(Strategy):
             jobs = [(title, None) for title in self._next_in_series(count)]
         else:
             jobs = [(title, None) for title in self._next_topics(count)]
+        failures = []
         for title, paper in jobs:
             try:
                 action_id = self._produce(title, paper)
@@ -523,9 +524,13 @@ class ContentPublisher(Strategy):
                 raise
             except LLMError as e:
                 self.log.warning("could not write %r: %s", title or paper.id, e)
+                failures.append(f"{title or paper.id}: {e}")
                 continue
             if action_id is not None:
                 created.append(action_id)
+        if failures and len(failures) == len(jobs):
+            # Nothing came out of this run because of the LLM; fail it so the scheduled workflow reports it.
+            raise LLMError("no article could be written: " + " / ".join(failures))
         return created
 
     def _next_topics(self, count: int) -> list[str]:
@@ -688,7 +693,7 @@ class ContentPublisher(Strategy):
         brief = self._brief(paper.title)
         if categories:
             brief += "\n# カテゴリ候補\n" + "\n".join(f"- {c}" for c in categories)
-        plan = self.ctx.llm.complete_json(PAPER_OUTLINE_SYSTEM, brief, strategy=self.name)
+        plan = self._plan(PAPER_OUTLINE_SYSTEM, brief)
         title = str(plan.get("title", "")).strip() or paper.title
         category = str(plan.get("category", "")).strip()
         if categories and category not in categories:
@@ -705,8 +710,17 @@ class ContentPublisher(Strategy):
                           "target": max(150, int(weight * scale)), "style": PAPER_STYLES[heading]})
         return title, parts, category or None
 
+    def _plan(self, system: str, brief: str) -> dict[str, Any]:
+        """The outline for a paper or basics article. Its headings are fixed, so when the reply
+        can't be read the article is still written from the headings alone."""
+        try:
+            return self.ctx.llm.complete_json(system, brief, strategy=self.name)
+        except LLMError as e:
+            self.log.warning("outline unreadable, writing from the fixed headings: %s", e)
+            return {}
+
     def _basics_outline(self, title: str) -> tuple[list[dict[str, Any]], str | None]:
-        plan = self.ctx.llm.complete_json(BASICS_OUTLINE_SYSTEM, self._brief(title), strategy=self.name)
+        plan = self._plan(BASICS_OUTLINE_SYSTEM, self._brief(title))
         points = plan.get("points") if isinstance(plan.get("points"), dict) else {}
         scale = int(self.cfg.get("min_chars", 5000)) / 5000
         parts: list[dict[str, Any]] = [
