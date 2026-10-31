@@ -909,3 +909,41 @@ def test_interactive_parts_keep_only_settings_the_site_can_run():
     assert clean_shortcodes("{{< growth >}}") == "{{< growth >}}"
     flip = '{{< flip front="よくある誤解" real="a" back="本当は" analogy="b" >}}'
     assert clean_shortcodes(flip) == flip
+
+
+class CutOffOutlineLLM(RecordingLLM):
+    """The outline reply stops mid-way, as a long Japanese plan did when the token limit was too low."""
+
+    def complete(self, system, user, *, json_mode=False, max_tokens=1500):
+        if "TASK: outline_basics" in system:
+            self.calls.append((system, user))
+            return LLMResponse('{"intro": "量子コンピュータは", "points": {"ひとことで言うと": ["従来のコンピュータはビ')
+        return super().complete(system, user, json_mode=json_mode, max_tokens=max_tokens)
+
+
+def test_a_cut_off_outline_still_gives_the_series_article(tmp_path):
+    agent = basics_agent(tmp_path, llm=CutOffOutlineLLM())
+    result = agent.run_once()
+    assert not result.errors
+    text = Path(articles(agent)[0].payload["draft_path"]).read_text(encoding="utf-8")
+    assert "## しくみを見てみよう" in text and "## クイズでチェック" in text
+
+
+class NoJsonReviewLLM(MockLLM):
+    def complete(self, system, user, *, json_mode=False, max_tokens=1500):
+        if "TASK: review_article" in system:
+            return LLMResponse("採点できませんでした")
+        return super().complete(system, user, json_mode=json_mode, max_tokens=max_tokens)
+
+
+def test_a_run_that_writes_nothing_because_of_the_llm_is_reported_as_failed(tmp_path):
+    agent = basics_agent(tmp_path, llm=NoJsonReviewLLM())
+    result = agent.run_once()
+    assert articles(agent) == []
+    assert "量子ビットとは？" in result.errors["content_publisher"]
+
+
+def test_json_replies_get_room_for_a_long_japanese_outline():
+    import inspect
+    from income_agent.llm import BudgetedLLM
+    assert inspect.signature(BudgetedLLM.complete_json).parameters["max_tokens"].default >= 3000

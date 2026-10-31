@@ -179,7 +179,9 @@ class BudgetedLLM:
         return resp
 
     def complete_json(self, system: str, user: str, *, strategy: str,
-                      max_tokens: int = 800) -> dict[str, Any]:
+                      max_tokens: int = 3000) -> dict[str, Any]:
+        # Generous on purpose: a Japanese outline with a few points under each of nine headings runs past
+        # 1000 tokens, and a cut-off reply is not JSON. Only the tokens actually written are billed.
         resp = self.complete(system, user, strategy=strategy, json_mode=True,
                              max_tokens=max_tokens)
         return parse_json(resp.text)
